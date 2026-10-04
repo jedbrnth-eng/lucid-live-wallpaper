@@ -17,16 +17,21 @@
 </p>
 
 <p align="center">
-  <a href="#-install-in-10-seconds">Install</a> ·
-  <a href="#-whats-inside">Features</a> ·
-  <a href="#-bring-your-own">Bring your own</a> ·
-  <a href="#-where-the-wallpapers-come-from">Sources</a> ·
-  <a href="#-privacy">Privacy</a>
+  <a href="#install-in-10-seconds">Install</a> ·
+  <a href="#whats-inside">Features</a> ·
+  <a href="#bring-your-own">Bring your own</a> ·
+  <a href="#where-the-wallpapers-come-from">Sources</a> ·
+  <a href="#privacy">Privacy</a>
+</p>
+
+<p align="center">
+  <a href="docs/demo.mp4"><img src="docs/demo.webp" alt="Lucid playing a live 4K aurora wallpaper on the macOS desktop" width="860"></a><br>
+  <sub>Live aurora wallpaper running on the desktop. <a href="docs/demo.mp4">Watch in full HD</a>.</sub>
 </p>
 
 ---
 
-## ⚡ Install in 10 seconds
+## Install in 10 seconds
 
 Open **Terminal** (press `⌘ Space`, type `Terminal`, press Return), paste this line, and press Return:
 
@@ -34,7 +39,7 @@ Open **Terminal** (press `⌘ Space`, type `Terminal`, press Return), paste this
 curl -fsSL https://raw.githubusercontent.com/jedbrnth-eng/lucid-live-wallpaper/main/install.sh | bash
 ```
 
-Lucid downloads, lands in your Applications folder and opens. **No security warnings, no setup.**
+Lucid downloads, lands in your Applications folder and opens. Lucid isn't notarized by Apple yet, so the installer clears macOS's download flag for you.
 
 <sub>Needs an Apple Silicon Mac (M1 or newer) on macOS 14 Sonoma or later. Want to read the script first? It's [install.sh](install.sh), about 40 lines. The app is open source, so you can read every line it runs.</sub>
 
@@ -67,31 +72,31 @@ rm -rf /Applications/Lucid.app "$HOME/Library/Application Support/Lucid"
 
 </details>
 
-## 🖼 Take a look
+## Take a look
 
 <p align="center">
   <img src="docs/screenshot.png" alt="Lucid showing the Apple Aerials catalog" width="860">
 </p>
 
-## ✨ What's inside
+## What's inside
 
-| | |
+| Feature | |
 |---|---|
-| 🌌 **Live 4K catalog** | About 590 curated moving wallpapers from ESA/Webb, ESA/Hubble, ESO, NASA and Wikimedia Commons. Every clip is verified at 3840×2160 or larger and turned into a seamless loop. |
-| ✈️ **Apple Aerials** | Apple's own 4K aerial films. The ones already on your Mac apply instantly; others download from Apple when you pick them. |
-| 🔭 **Stills** | NASA 4K Space and Wikimedia 4K Photos, with the license shown on every item. |
-| 🎞 **Your own library** | Drag in your own videos and photos, or whole folders. Anything below 4K is flagged. |
-| 🖥 **Every display** | A different wallpaper on each monitor, playlists, favorites, an auto-change timer, and open at login. |
-| 🔋 **Battery-friendly** | Pauses when covered, in Low Power Mode, on battery, when the screen locks or the display sleeps. |
-| 🔒 **Private by design** | No account, no analytics, no telemetry. Native SwiftUI and AppKit, no dependencies. |
+| **Live 4K catalog** | About 590 curated moving wallpapers from ESA/Webb, ESA/Hubble, ESO, NASA and Wikimedia Commons. Every clip is verified at 3840×2160 or larger and turned into a seamless loop. |
+| **Apple Aerials** | Apple's own 4K aerial films. The ones already on your Mac apply instantly; others download from Apple when you pick them. |
+| **Stills** | NASA 4K Space and Wikimedia 4K Photos, with the license shown on every item. |
+| **Your own library** | Drag in your own videos and photos, or whole folders. Anything below 4K is flagged. |
+| **Every display** | A different wallpaper on each monitor, playlists, favorites, an auto-change timer, and open at login. |
+| **Battery-friendly** | Pauses when covered, in Low Power Mode, on battery, when the screen locks or the display sleeps. |
+| **Private by design** | No account, no analytics, no telemetry. Native SwiftUI and AppKit, no dependencies. |
 
-## 🚀 Use it
+## Use it
 
 1. Open Lucid. It also lives in your menu bar.
 2. In **Discover**, hover a wallpaper and click **Apply**.
 3. Have more than one screen? Open a wallpaper and use **Set on Display**.
 
-## 📥 Bring your own
+## Bring your own
 
 Three ways, pick whichever is easiest:
 
@@ -101,7 +106,7 @@ Three ways, pick whichever is easiest:
 
 MP4 and MOV work as they are. WebM, MKV and similar formats are converted to HEVC automatically. Your files show up under **Downloaded → My Files**.
 
-## 🌍 Where the wallpapers come from
+## Where the wallpapers come from
 
 **This repo contains no wallpaper media.** `catalog.json` is a list of links and credits. The app downloads clips from their original sources onto your Mac, and shows the credit and license for every item.
 
@@ -114,24 +119,29 @@ The wallpapers belong to their creators, each under its own license, and the app
 
 Loops are modified (cross-faded, re-encoded) copies for **personal use on your own Mac**. If you republish any of them, follow each item's license, including attribution and share-alike. Full research notes: [`SOURCES.md`](SOURCES.md).
 
-## 🛠 How it works
+## How it works
+
 Each display gets a borderless window at desktop level, above the system wallpaper and below the desktop icons, holding a muted, hardware-decoded looping `AVQueuePlayer`. A frame from the video is also set as the real desktop picture, so Mission Control and other Spaces show a matching still.
 Data lives in `~/Library/Application Support/Lucid/`.
 
-## 🔒 Privacy
+## Privacy
+
 No analytics or telemetry. The app only contacts the content sources above (NASA, ESA, ESO, Wikimedia Commons, Apple's servers for Aerial films you choose, and Pixabay if you add a key) to browse and download what you choose.
 
-## 🧪 Test
+## Test
+
 ```
 ./selftest.sh                                      # every source returns only ≥3840×2160 items
 python3 -m unittest tools/test_build_catalog.py    # offline catalog-builder tests
 python3 tools/build_catalog.py catalog.json        # rebuild the Live 4K catalog (slow)
 ```
 
-## 🤝 Contributing
+## Contributing
+
 Issues and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md). Release history is in [CHANGELOG.md](CHANGELOG.md).
 
-## 📄 License
+## License
+
 The code is [MIT](LICENSE) licensed. Wallpaper content stays under its creators' licenses, as above.
 
 *Not affiliated with or endorsed by Apple, NASA, ESA, ESO, Wikimedia or Pixabay.*
