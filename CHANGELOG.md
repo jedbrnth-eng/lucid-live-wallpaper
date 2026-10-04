@@ -6,6 +6,7 @@ All notable changes to Lucid. The format follows [Keep a Changelog](https://keep
 First public release.
 
 ### Added
+- One-line installer (`install.sh`) and an automated release workflow that publishes `Lucid.zip`.
 - Live 4K catalog of about 590 curated moving wallpapers from ESA/Webb, ESA/Hubble, ESO, NASA and Wikimedia Commons, each with credit and license.
 - Apple Aerials browser; films already on the Mac apply instantly, others download from Apple on demand.
 - NASA 4K Space and Wikimedia 4K Photos stills, and optional Pixabay 4K video (your own key, stored in the Keychain).

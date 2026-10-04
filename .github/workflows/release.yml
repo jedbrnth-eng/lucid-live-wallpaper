@@ -1,0 +1,43 @@
+name: Release
+
+# Publishes a GitHub release with Lucid.zip whenever VERSION changes on main
+# (or when run by hand). The release tag is v<VERSION>.
+on:
+  push:
+    branches: [main]
+    paths: [VERSION]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read version
+        id: v
+        run: echo "tag=v$(tr -d '[:space:]' < VERSION)" >> "$GITHUB_OUTPUT"
+      - name: Skip if this version is already released
+        id: exists
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "${{ steps.v.outputs.tag }}" >/dev/null 2>&1; then echo "found=true" >> "$GITHUB_OUTPUT"; else echo "found=false" >> "$GITHUB_OUTPUT"; fi
+      - name: Build Lucid.app
+        if: steps.exists.outputs.found == 'false'
+        run: ./build.sh
+      - name: Package
+        if: steps.exists.outputs.found == 'false'
+        run: ditto -c -k --sequesterRsrc --keepParent build/Lucid.app Lucid.zip
+      - name: Publish release
+        if: steps.exists.outputs.found == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ steps.v.outputs.tag }}" Lucid.zip \
+            --title "Lucid ${{ steps.v.outputs.tag }}" \
+            --notes-file .github/release-notes.md \
+            --generate-notes
