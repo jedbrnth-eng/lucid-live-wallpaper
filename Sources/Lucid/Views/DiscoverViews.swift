@@ -39,30 +39,51 @@ struct AerialsView: View {
     }
 }
 
+enum LiveSort: String, CaseIterable { case featured = "Featured", name = "Name", shortest = "Shortest", smallest = "Smallest Download" }
+
 struct LiveView: View {
     @EnvironmentObject var store: Store
+    @State private var theme = "All"
     @State private var col = "All"
-    @State private var tag = "All"
+    @State private var sort = LiveSort.featured
     @State private var q = ""
     @State private var selected: WallItem?
     var body: some View {
         let cols = ["All"] + Array(Set(store.live.compactMap(\.author))).sorted()
-        let tags = ["All"] + Array(Set(store.live.compactMap(\.category))).sorted()
-        let items = store.live.filter { a in
-            (col == "All" || a.author == col) && (tag == "All" || a.category == tag) &&
+        let counts = Dictionary(grouping: store.live, by: LiveCatalog.theme).mapValues(\.count)
+        var items = store.live.filter { a in
+            (theme == "All" || LiveCatalog.theme(a) == theme) && (col == "All" || a.author == col) &&
             (q.isEmpty || a.title.localizedCaseInsensitiveContains(q))
         }
-        ScrollView {
+        switch sort {
+        case .featured: break
+        case .name: items.sort { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+        case .shortest: items.sort { ($0.duration ?? .infinity) < ($1.duration ?? .infinity) }
+        case .smallest: items.sort { ($0.bytes ?? .max) < ($1.bytes ?? .max) }
+        }
+        return ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 Header(title: "Live 4K", subtitle: Source.live.blurb)
-                HStack {
-                    TextField("Search (e.g. nebula, galaxy, Earth, zoom)", text: $q).textFieldStyle(.roundedBorder).frame(maxWidth: 360)
-                    Text("\(items.count) of \(store.live.count) clips").font(.caption).foregroundStyle(.secondary)
+                HStack(spacing: 12) {
+                    TextField("Search (e.g. waterfall, beach, nebula)", text: $q).textFieldStyle(.roundedBorder).frame(maxWidth: 300)
+                    Picker("Category", selection: $theme) {
+                        Text("All (\(store.live.count))").tag("All")
+                        Divider()
+                        ForEach(LiveCatalog.themes.filter { counts[$0] != nil }, id: \.self) { t in Text("\(t) (\(counts[t] ?? 0))").tag(t) }
+                    }.pickerStyle(.menu).fixedSize()
+                    Picker("Source", selection: $col) {
+                        ForEach(cols, id: \.self) { Text($0).tag($0) }
+                    }.pickerStyle(.menu).fixedSize()
+                    Picker("Sort by", selection: $sort) {
+                        ForEach(LiveSort.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                    }.pickerStyle(.menu).fixedSize()
+                    Spacer()
+                    Text("\(items.count) clips").font(.caption).foregroundStyle(.secondary)
                 }
-                Chips(options: cols, selected: col) { col = $0 }
-                Chips(options: tags, selected: tag) { tag = $0 }
                 if store.live.isEmpty {
                     Text("The live catalog is empty. Run tools/build_catalog.py to rebuild it.").foregroundStyle(.secondary)
+                } else if items.isEmpty {
+                    Text("No clips match. Try another category or clear the search.").foregroundStyle(.secondary)
                 }
                 Grid(items: items, selected: $selected)
             }.padding(24)

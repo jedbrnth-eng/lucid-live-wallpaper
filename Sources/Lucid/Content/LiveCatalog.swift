@@ -12,6 +12,25 @@ import ImageIO
 // MARK: - Curated live catalog (built by tools/build_catalog.py; every clip ffprobe-verified ≥4K)
 
 enum LiveCatalog {
+    /// Browsing themes shown in the Live 4K "Category" menu, in display order.
+    static let themes = ["Space", "Nature & Landscapes", "Ocean & Beaches", "Sky & Time-lapse", "Cities"]
+
+    /// Maps a clip to one theme from its collection and catalog tag.
+    static func theme(_ it: WallItem) -> String {
+        guard it.author == "Wikimedia Commons" else { return "Space" }
+        let t = it.title.lowercased()
+        func has(_ words: [String]) -> Bool { words.contains { t.contains($0) } }
+        if has(["beach", "ocean", "coast", "waves", "surf", "pier", " sea", "sea ", "bay "]) { return "Ocean & Beaches" }
+        if has(["city", "downtown", "skyline ", "street", "manhattan", "new york", "bangkok", "silom", "tokyo", "london", "paris", "bridge", "harbor bridge"]) { return "Cities" }
+        if has(["eclipse", "night sky", "milky way", "aurora", "star trail", "stars", "lightning", "sunset", "sunrise", "clouds", "moon"]) { return "Sky & Time-lapse" }
+        switch it.category {
+        case "Ocean": return "Ocean & Beaches"
+        case "Sky", "Sun", "Time-lapse": return "Sky & Time-lapse"
+        case "City": return "Cities"
+        default: return "Nature & Landscapes"
+        }
+    }
+
     static let bundled = Bundle.main.url(forResource: "catalog", withExtension: "json")
     static let userCopy = Paths.support.appendingPathComponent("catalog.json")
 

@@ -30,6 +30,13 @@ struct MenuContent: View {
                 ForEach(store.favorites.prefix(15)) { f in Button(f.title) { store.setWallpaper(store.libraryItem(f.id) ?? f) } }
             }
         }
+        let recent = store.library.filter { $0.lastAppliedAt != nil && $0.isLocalReady }
+            .sorted { $0.lastAppliedAt! > $1.lastAppliedAt! }.prefix(10)
+        if !recent.isEmpty {
+            Menu("Recently Used") {
+                ForEach(Array(recent)) { r in Button(r.title) { store.setWallpaper(r) } }
+            }
+        }
         if !store.playlists.isEmpty {
             Menu("Play Playlist") {
                 ForEach(store.playlists) { p in Button(p.name) { store.playPlaylist(p.id) } }

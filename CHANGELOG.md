@@ -2,6 +2,16 @@
 
 All notable changes to Lucid. The format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.1.0] - 2026-10-04
+
+### Added
+- Live 4K now has a **Category** menu: Space, Nature & Landscapes, Ocean & Beaches, Sky & Time-lapse and Cities, with clip counts.
+- **Sort by** menu: Featured, Name, Shortest or Smallest Download.
+- Menu bar: a **Recently Used** submenu to switch back to a recent wallpaper in one click.
+
+### Changed
+- The Live 4K source filter is now a compact menu instead of a row of chips.
+
 ## [1.0.1] - 2026-10-04
 
 ### Fixed

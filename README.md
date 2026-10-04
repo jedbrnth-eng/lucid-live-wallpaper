@@ -87,11 +87,11 @@ rm -rf /Applications/Lucid.app "$HOME/Library/Application Support/Lucid"
 
 | Feature | |
 |---|---|
-| **Live 4K catalog** | About 590 curated moving wallpapers from ESA/Webb, ESA/Hubble, ESO, NASA and Wikimedia Commons. Every clip is verified at 3840×2160 or larger and turned into a seamless loop. |
+| **Live 4K catalog** | About 590 curated moving wallpapers from ESA/Webb, ESA/Hubble, ESO, NASA and Wikimedia Commons. Browse by category (Space, Nature & Landscapes, Ocean & Beaches, Sky & Time-lapse, Cities). Every clip is verified at 3840×2160 or larger and turned into a seamless loop. |
 | **Apple Aerials** | Apple's own 4K aerial films. The ones already on your Mac apply instantly; others download from Apple when you pick them. |
 | **Stills** | NASA 4K Space and Wikimedia 4K Photos, with the license shown on every item. |
 | **Your own library** | Drag in your own videos and photos, or whole folders. Anything below 4K is flagged. |
-| **Every display** | A different wallpaper on each monitor, playlists, favorites, an auto-change timer, and open at login. |
+| **Every display** | A different wallpaper on each monitor, playlists, favorites, an auto-change timer, and open at login. Switch to a recent wallpaper straight from the menu bar. |
 | **Battery-friendly** | Pauses when covered, in Low Power Mode, on battery, when the screen locks or the display sleeps. |
 | **Private by design** | No account, no analytics, no telemetry. Native SwiftUI and AppKit, no dependencies. |
 
