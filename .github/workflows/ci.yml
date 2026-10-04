@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    name: Build and test (macOS)
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Swift version
+        run: swiftc --version
+      - name: Build Lucid.app
+        run: ./build.sh
+      - name: Check the bundle
+        run: |
+          test -x build/Lucid.app/Contents/MacOS/Lucid
+          plutil -lint build/Lucid.app/Contents/Info.plist
+      - name: Catalog builder tests (offline)
+        run: python3 -m unittest tools/test_build_catalog.py
+      - name: Catalog is valid JSON
+        run: python3 -c "import json; d=json.load(open('catalog.json')); print(len(d), 'catalog items')"

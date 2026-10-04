@@ -1,10 +1,23 @@
+<p align="center">
+  <img src="docs/banner.png" alt="Lucid: live 4K wallpapers for Mac" width="860">
+</p>
+
+<p align="center">
+  <a href="https://github.com/jedbrnth-eng/lucid-live-wallpaper/actions/workflows/ci.yml"><img src="https://github.com/jedbrnth-eng/lucid-live-wallpaper/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <img src="https://img.shields.io/badge/macOS-14%2B-000000?logo=apple&logoColor=white" alt="macOS 14+">
+  <img src="https://img.shields.io/badge/Apple%20Silicon-arm64-555555" alt="Apple Silicon">
+  <img src="https://img.shields.io/badge/Swift-5-F05138?logo=swift&logoColor=white" alt="Swift 5">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT license"></a>
+  <img src="https://img.shields.io/badge/dependencies-none-brightgreen" alt="No dependencies">
+</p>
+
 # Lucid
 
 **Live 4K wallpapers for Mac.** A free, native live-wallpaper app for macOS. Moving space, nature and ocean wallpapers on every display, with no account, no subscription and no tracking.
 
-![Lucid showing the Apple Aerials catalog](docs/screenshot.png)
-
 **[Download the source (.zip)](https://github.com/jedbrnth-eng/lucid-live-wallpaper/archive/refs/heads/main.zip)**, then follow [Install](#install) below. About 2 minutes.
+
+![Lucid showing the Apple Aerials catalog](docs/screenshot.png)
 
 ## Features
 - **Live 4K catalog:** ~590 curated moving wallpapers from ESA/Webb, ESA/Hubble, ESO, NASA and Wikimedia Commons. Every clip is verified as 3840×2160 or larger, then turned into a seamless loop (HEVC, no audio). Each item shows its full credit and links to its license.
@@ -51,6 +64,9 @@ Open Lucid. It also lives in the menu bar.
 ## How it works
 Each display gets a borderless window at desktop level, above the system wallpaper and below the desktop icons, holding a muted, hardware-decoded looping `AVQueuePlayer`. A frame from the video is also set as the real desktop picture, so Mission Control and other Spaces show a matching still.
 Data lives in `~/Library/Application Support/Lucid/`.
+
+## Contributing
+Issues and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md). Release history is in [CHANGELOG.md](CHANGELOG.md).
 
 ## Privacy
 No analytics or telemetry. The app only contacts the content sources above (NASA, ESA, ESO, Wikimedia Commons, Apple's servers for Aerial films you choose, and Pixabay if you add a key) to browse and download what you choose.

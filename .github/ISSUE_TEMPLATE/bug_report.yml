@@ -1,0 +1,28 @@
+name: Bug report
+description: Something in Lucid is broken
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      placeholder: "e.g. 15.1"
+    validations:
+      required: true
+  - type: input
+    id: mac
+    attributes:
+      label: Mac model
+      placeholder: "e.g. MacBook Pro M3, external 4K display"
+  - type: textarea
+    id: logs
+    attributes:
+      label: Output of ./build.sh or Console errors
+      render: shell
