@@ -1,6 +1,6 @@
 # Contributing to Lucid
 
-Thanks for taking a look. Lucid is a small native macOS app: one Swift source file, no dependencies.
+Thanks for taking a look. Lucid is a small native macOS app written in Swift, with no dependencies.
 
 ## Build
 ```
@@ -17,7 +17,7 @@ python3 -m unittest tools/test_build_catalog.py   # offline catalog-builder test
 ```
 
 ## Guidelines
-- Keep it dependency-free and in a single `Lucid.swift` unless a split is clearly worth it.
+- Keep it dependency-free. Sources live in `Sources/Lucid`, grouped by area (see the README's project layout); put new code in the matching folder.
 - **Never commit wallpaper media.** The repo only ships `catalog.json`, a list of links and credits.
 - Any new content source must show its credit and license in the app, and must only list items that are 3840×2160 or larger.
 - Keep the privacy promise: no analytics, no telemetry, and the app only contacts the sources listed in the README.

@@ -6,7 +6,7 @@ Open **Terminal** (press `Cmd + Space`, type `Terminal`, press Return), paste th
 curl -fsSL https://raw.githubusercontent.com/jedbrnth-eng/lucid-live-wallpaper/main/install.sh | bash
 ```
 
-Lucid lands in Applications and opens. No security warnings, no setup.
+Lucid lands in Applications and opens. Lucid isn't notarized by Apple yet, so the installer clears macOS's download flag for you.
 
 Requires macOS 14 (Sonoma) or newer on an Apple Silicon Mac.
 

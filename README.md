@@ -124,6 +124,20 @@ Loops are modified (cross-faded, re-encoded) copies for **personal use on your o
 Each display gets a borderless window at desktop level, above the system wallpaper and below the desktop icons, holding a muted, hardware-decoded looping `AVQueuePlayer`. A frame from the video is also set as the real desktop picture, so Mission Control and other Spaces show a matching still.
 Data lives in `~/Library/Application Support/Lucid/`.
 
+## Project layout
+
+```
+Sources/Lucid/
+├── App/        entry point, app delegate, menu bar, file import
+├── Core/       models, paths, preferences, Keychain
+├── Content/    content providers and the curated Live 4K catalog
+├── Engine/     per-display wallpaper windows and the downloader
+├── Media/      transcoding and seamless loop maker
+├── Store/      app state shared by the views
+└── Views/      SwiftUI screens and components
+tools/          catalog builder and its tests
+```
+
 ## Privacy
 
 No analytics or telemetry. The app only contacts the content sources above (NASA, ESA, ESO, Wikimedia Commons, Apple's servers for Aerial films you choose, and Pixabay if you add a key) to browse and download what you choose.
