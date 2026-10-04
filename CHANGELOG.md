@@ -2,6 +2,15 @@
 
 All notable changes to Lucid. The format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.0.1] - 2026-10-04
+
+### Fixed
+- Live wallpapers keep playing when you hide Lucid (⌘H). Before, hiding the app left only the still desktop picture.
+
+### Changed
+- The source code is split from one file into feature folders under `Sources/Lucid`. No behavior change.
+- The app reports its real version (1.0.1) in Finder and About.
+
 ## [1.0.0] - 2026-10-04
 First public release.
 
