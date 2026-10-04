@@ -25,8 +25,8 @@
 </p>
 
 <p align="center">
-  <a href="docs/demo.mp4"><img src="docs/demo.webp" alt="Lucid playing a live 4K aurora wallpaper on the macOS desktop" width="860"></a><br>
-  <sub>Live aurora wallpaper running on the desktop. <a href="docs/demo.mp4">Watch in full HD</a>.</sub>
+  <a href="docs/demo.mp4"><img src="docs/demo.webp" alt="Picking a wallpaper in Lucid and applying it to the macOS desktop" width="860"></a><br>
+  <sub>Pick a wallpaper, click Apply, and the desktop changes. <a href="docs/demo.mp4">Watch in full HD</a>.</sub>
 </p>
 
 ---
@@ -76,6 +76,11 @@ rm -rf /Applications/Lucid.app "$HOME/Library/Application Support/Lucid"
 
 <p align="center">
   <img src="docs/screenshot.png" alt="Lucid showing the Apple Aerials catalog" width="860">
+</p>
+
+<p align="center">
+  <a href="docs/aurora.mp4"><img src="docs/aurora.webp" alt="A live 4K aurora wallpaper running on the desktop" width="860"></a><br>
+  <sub>A live aurora wallpaper on the desktop. <a href="docs/aurora.mp4">Watch in full HD</a>.</sub>
 </p>
 
 ## What's inside
