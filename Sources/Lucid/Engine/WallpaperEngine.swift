@@ -31,6 +31,7 @@ final class WallpaperWindow: NSWindow {
         backgroundColor = .black
         hasShadow = false
         ignoresMouseEvents = true
+        canHide = false  // keep playing when the user hides Lucid (⌘H)
         isReleasedWhenClosed = false
         animationBehavior = .none
         title = "Lucid Desktop"
