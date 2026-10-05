@@ -1,6 +1,7 @@
-# Graphics pass for the Day 1 reel (v3: stabilized, eased, dissolved). Usage: python3 render_day1_reel.py out.mp4 [preview]
+# Graphics pass for the Day 1 reel (v4). Usage: python3 render_day1_reel.py out.mp4 [preview]
 # Inputs: src/raw2.mp4 (clean phone take, no captions), src/img1339.mov (README install B-roll), src/img1341.mov (apply B-roll).
-# Needs ffmpeg with libvidstab and Inter TTFs (Bold, SemiBold, Medium) in ./fonts (https://github.com/rsms/inter/releases).
+# Needs ffmpeg and Inter TTFs (Bold, SemiBold, Medium) in ./fonts (https://github.com/rsms/inter/releases).
+# No stabilization on purpose: vidstab reads on-screen scrolling as camera shake and bounces the frame.
 # Timings are keyed to the words in the original 31 s take; re-time the constants if the cut changes.
 import subprocess, sys, os
 F_B="fonts/Inter-Bold.ttf"; F_S="fonts/Inter-SemiBold.ttf"; F_M="fonts/Inter-Medium.ttf"
@@ -25,10 +26,10 @@ def dim(name,x,y,w,h,s,e,a,d=0.3):
     L=e-s
     return (f"color=c=black@{a}:s={w}x{h}:r=30:d={L},format=yuva420p,"
             f"fade=t=in:st=0:d={d}:alpha=1,fade=t=out:st={L-d}:d={d}:alpha=1,setpts=PTS+{s}/TB[{name}]"), (x,y)
-STAB="vidstabtransform=input={trf}:smoothing=40:optzoom=1:zoom=2:interpol=bicubic,unsharp=5:5:0.4"
+STAB="null"
 pre=[]
 # base: stabilized, 1080x1920, slow 4% push-in over the whole take
-pre.append("[0:v]"+STAB.format(trf="stab0.trf")+",scale=w='1080*(1+0.045*t/31)':h='1920*(1+0.045*t/31)':eval=frame:flags=lanczos,crop=1080:1920,format=yuv420p[base]")
+pre.append("[0:v]"+STAB.format(trf="stab0.trf")+",scale=1080:1920:flags=lanczos,format=yuv420p[base]")
 # cutaways with dissolve edges
 pre.append("[1:v]"+STAB.format(trf="stab1.trf")+",trim=1.6:3.4,setpts=PTS-STARTPTS,scale=1080:1920:flags=lanczos,format=yuva420p,fade=t=in:st=0:d=0.3:alpha=1,fade=t=out:st=1.5:d=0.3:alpha=1,setpts=PTS+23.6/TB[c1]")
 pre.append("[2:v]"+STAB.format(trf="stab2.trf")+",trim=4.3:5.9,setpts=PTS-STARTPTS,scale=1080:1920:flags=lanczos,format=yuva420p,fade=t=in:st=0:d=0.3:alpha=1,fade=t=out:st=1.3:d=0.3:alpha=1,setpts=PTS+25.4/TB[c2]")
@@ -55,10 +56,19 @@ chain.append(txt("Free  ·  Open source",F_M,46,ACC,76,rise(1312,3.7),3.7,6.8))
 for tx,s,e,f,sz in [("Drag in any video",7.0,10.8,F_M,44),("Done.",12.9,14.0,F_S,52),("Works with any video file",14.3,16.5,F_M,44),("Installs in 10 seconds",23.7,25.4,F_M,44)]:
     y=1380 if tx.startswith("Installs") else 560
     chain.append(txt(tx,f,sz,WHITE,CX,rise(y,s,0.35,18),s,e,box="black@0.55"))
-# E. counter, eased
+# E. counter, eased, fixed-slot digits
 p=easeout(clip01("(t-17.0)/1.3"))
-cnt=f"%{{eif\\:{p}*590\\:d}}+"
-chain.append(f"drawtext=fontfile={F_B}:text='{cnt}':fontsize=200:fontcolor={WHITE}:x={CX}:y={rise(720,16.8)}:enable='between(t\\,16.8\\,20.1)':alpha='{alpha(16.8,20.1)}':shadowcolor=black@0.5:shadowx=0:shadowy=4")
+v=f"floor({p}*590)"
+SLOT=128; X0=(1080-(3*SLOT+120))//2; Y=rise(720,16.8)
+def digit(expr,slot,cond):
+    en=f"between(t\\,16.8\\,20.1)*({cond})"
+    return (f"drawtext=fontfile={F_B}:text='%{{eif\\:{expr}\\:d}}':fontsize=200:fontcolor={WHITE}"
+            f":x={X0+slot*SLOT}+({SLOT}-text_w)/2:y={Y}:enable='{en}':alpha='{alpha(16.8,20.1)}'"
+            f":shadowcolor=black@0.5:shadowx=0:shadowy=4")
+chain.append(digit(f"floor({v}/100)",0,f"gte({v}\\,100)"))
+chain.append(digit(f"mod(floor({v}/10)\\,10)",1,f"gte({v}\\,10)"))
+chain.append(digit(f"mod({v}\\,10)",2,"1"))
+chain.append(f"drawtext=fontfile={F_B}:text='+':fontsize=200:fontcolor={WHITE}:x={X0+3*SLOT}:y={Y}:enable='between(t\\,16.8\\,20.1)':alpha='{alpha(16.8,20.1)}':shadowcolor=black@0.5:shadowx=0:shadowy=4")
 chain.append(txt("wallpapers built in",F_M,50,GREY,CX,rise(950,17.0),17.0,20.1))
 # F. scoreboard
 chain.append(txt("I was paying",F_M,46,GREY,CX,rise(700,20.3),20.3,23.5))
@@ -90,12 +100,9 @@ af=["[0:a]highpass=f=80,acompressor=threshold=-24dB:ratio=2.5:attack=8:release=1
 for i,h in enumerate(hits):
     af.append(f"aevalsrc='0.9*sin(2*PI*55*t)*exp(-7*t)+0.45*sin(2*PI*110*t)*exp(-9*t)':d=0.7:s=48000,adelay={int(h*1000)}|{int(h*1000)},volume=0.8[h{i}]")
 af.append("[voice]"+"".join(f"[h{i}]" for i in range(len(hits)))+f"amix=inputs={len(hits)+1}:normalize=0:duration=first,alimiter=limit=0.89[a]")
-open("filters3.txt","w").write(";".join(pre)+";"+vf+";"+";".join(af))
+open("filters4.txt","w").write(";".join(pre)+";"+vf+";"+";".join(af))
 inputs=["src/raw2.mp4","src/img1339.mov","src/img1341.mov"]
-for i,f in enumerate(inputs):
-    if not os.path.exists(f"stab{i}.trf"):
-        subprocess.run(["ffmpeg","-y","-v","error","-i",f,"-vf",f"vidstabdetect=shakiness=6:accuracy=15:result=stab{i}.trf","-f","null","-"],check=True)
 out=sys.argv[1]; preview=len(sys.argv)>2
-cmd=["ffmpeg","-y","-v","error"]+sum([["-i",f] for f in inputs],[])+["-filter_complex_script","filters3.txt","-map","[v]","-map","[a]",
+cmd=["ffmpeg","-y","-v","error"]+sum([["-i",f] for f in inputs],[])+["-filter_complex_script","filters4.txt","-map","[v]","-map","[a]",
      "-r","30","-c:v","libx264","-preset","fast" if preview else "slow","-crf","28" if preview else "19","-pix_fmt","yuv420p","-c:a","aac","-b:a","256k","-movflags","+faststart"]
 subprocess.run(cmd+[out],check=True)
