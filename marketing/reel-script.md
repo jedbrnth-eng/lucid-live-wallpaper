@@ -2,7 +2,7 @@
 
 One video. No voiceover. Vertical 9:16, 1080×1920, 30 fps delivery, shot at 4K60. Runtime 22.5 s. Same file posted to TikTok, Instagram Reels, YouTube Shorts and X, with a different caption and link strategy per platform (bottom of this file).
 
-Changes from the first draft, all applied below: competitor paywall shot removed (legal risk, and the new hook says the same thing in four words), voiceover removed, reactions scene removed (no footage), CTA changed to "Comment LUCID", new hook, anti-slop rules added.
+Changes from the first draft, all applied below: competitor paywall shot removed (legal risk, and the new hook says the same thing in four words), voiceover removed, reactions scene removed (no footage), CTA changed to the URL plus "or comment LUCID", new hook, anti-slop rules added.
 
 ---
 
@@ -104,13 +104,13 @@ Two displays? Make cut 4 a wide of both running different wallpapers.
 |---|---|
 | Source | Black. |
 | 00:19.8 | App icon (`icon/AppIcon.png`) 360 px, scales 96 % → 100 % over 10 frames. Wordmark **Lucid** under it, Semibold 80 px. |
-| 00:20.5 | Under the wordmark, Semibold 72 px, accent #7C5CFF: **Comment LUCID** |
-| 00:21.0 | Under that, Medium 44 px, #A1A1AA: and I'll send you the GitHub link. |
-| 00:21.5 | Bottom of the title zone, 28 px, #52525B: github.com/jedbrnth-eng/lucid-live-wallpaper |
+| 00:20.5 | Under the wordmark, Medium 52 px, white, two lines so it's readable at phone size:<br>github.com/jedbrnth-eng/<br>lucid-live-wallpaper |
+| 00:21.2 | Under the URL, Semibold 60 px, accent #7C5CFF: **or comment LUCID** |
+| 00:21.6 | Under that, Medium 40 px, #A1A1AA: and I'll send it to you. |
 | 00:21.9 – 00:22.5 | Hold. Nothing moves. |
 | Sound | Music collapses to one held note at 00:19.8. Sub hit on the icon landing. Music out at 00:21.5. Last second silent. |
-| Why "Comment LUCID" works | Two reasons, and only one is the link. Comments are the heaviest-weighted engagement signal on TikTok and Instagram. A video with a 3 % comment rate gets pushed to the next audience tier regardless of what the comments say. The link delivery is the excuse; the comment is the product. |
-| Why the URL is still there | Trust. A person who doesn't want to comment can still type it. It is deliberately small. The big CTA is the comment. |
+| Why both | The URL first is the honest CTA: anyone can type it, and it shows there's nothing to hide. "Or comment LUCID" is the engagement CTA: comments are the heaviest-weighted signal on TikTok and Instagram, and a video with a 3 % comment rate gets pushed to the next audience tier regardless of what the comments say. |
+| URL legibility | 44 characters at one line is unreadable on a phone. Break it after the slash, exactly as written above, 52 px. Never smaller. Hold the end card the full 2.7 s so a viewer can screenshot it. |
 | Loop | The black end card cuts back to the S01 nebula on replay. Clean loop. |
 
 ---
@@ -127,10 +127,11 @@ Two displays? Make cut 4 a wide of both running different wallpapers.
 8. Space · Nature · Ocean · Cities
 9. One per screen.
 10. Lucid
-11. Comment LUCID
-12. and I'll send you the GitHub link.
+11. github.com/jedbrnth-eng/lucid-live-wallpaper
+12. or comment LUCID
+13. and I'll send it to you.
 
-Twelve lines in 22.5 seconds. Adding one means cutting one.
+Thirteen lines in 22.5 seconds. Adding one means cutting one.
 
 ---
 
