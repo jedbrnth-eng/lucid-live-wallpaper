@@ -1,8 +1,8 @@
 # Lucid: launch reel (final cut spec)
 
-One video. No voiceover. Vertical 9:16, 1080×1920, 30 fps delivery, shot at 4K60. Runtime 25 s. Same file posted to TikTok, Instagram Reels, YouTube Shorts and X, with a different caption and link strategy per platform (bottom of this file).
+One video. No voiceover. Vertical 9:16, 1080×1920, 30 fps delivery, shot at 4K60. Runtime 22.5 s. Same file posted to TikTok, Instagram Reels, YouTube Shorts and X, with a different caption and link strategy per platform (bottom of this file).
 
-Changes from the first draft, all applied below: competitor paywall shot removed (legal risk, and the new hook says the same thing in four words), voiceover removed, CTA changed to "Comment LUCID", new hook, anti-slop rules added.
+Changes from the first draft, all applied below: competitor paywall shot removed (legal risk, and the new hook says the same thing in four words), voiceover removed, reactions scene removed (no footage), CTA changed to "Comment LUCID", new hook, anti-slop rules added.
 
 ---
 
@@ -17,7 +17,6 @@ Short-form viewers can smell a template in half a second. These are the tells, a
 - **No stock whoosh library.** Sub hits you make yourself, a keyboard you record yourself, transients you can barely hear.
 - **No lifted blacks, no teal/orange.** Neutral, dark, slightly crushed.
 - **No stock music with a vocal chop.** Minimal piano/pad, one open moment, ends in silence.
-- **No fake people.** Real reactions or no reactions.
 - **The camera shots carry the video.** A real MacBook in a dark room, filmed on a tripod, is what reads as expensive. Screen recordings are evidence, not beauty.
 
 ---
@@ -27,7 +26,7 @@ Short-form viewers can smell a template in half a second. These are the tells, a
 | | |
 |---|---|
 | Canvas | 1080 × 1920, 30 fps export. Shoot camera footage at 4K60. |
-| Runtime | 25 s |
+| Runtime | 22.5 s |
 | Safe zones | No text in the bottom 320 px or the right 150 px. Titles live between y=400 and y=1500. |
 | Frame 0 | TikTok uses frame 1 as the cover. The hook text is already on screen at frame 1. No fade in. |
 | Type | Inter (free, OFL). Semibold for the hook and CTA, Medium for everything else. Tracking −2 %. White #FFFFFF, secondary #A1A1AA, accent #7C5CFF. |
@@ -99,27 +98,17 @@ Two displays? Make cut 4 a wide of both running different wallpapers.
 | Text | Through all four cuts, top-center, Medium 56 px: **590+ in 4K.**<br>Under it, 40 px, #A1A1AA: Space · Nature · Ocean · Cities<br>Cut 4 if dual display: **One per screen.** |
 | Sound | Music full. A 50 ms air transient on each cut, barely audible. |
 
-### S06 · 00:19.8 – 00:22.3 · REAL PEOPLE
-
-| | |
-|---|---|
-| Source | Phone, handheld, natural light. Three cuts, ~0.8 s each, of real people seeing the desktop change on their own Mac for the first time. Unscripted. |
-| Text | Top-center, Medium 48 px, #A1A1AA: First reactions. |
-| Sound | Music ducks 6 dB. Their real audio comes up. One honest "oh" is the best sound in the video. |
-| Rule | If nobody reacts, cut the scene and extend S05 by 2.5 s. Faking this is the one mistake you can't recover from with an open-source project. |
-| How | Install it on friends' Macs while filming. Say only "watch the desktop." Get "yes you can post this" on camera. |
-
-### S07 · 00:22.3 – 00:25.0 · CTA
+### S06 · 00:19.8 – 00:22.5 · CTA
 
 | | |
 |---|---|
 | Source | Black. |
-| 00:22.3 | App icon (`icon/AppIcon.png`) 360 px, scales 96 % → 100 % over 10 frames. Wordmark **Lucid** under it, Semibold 80 px. |
-| 00:23.0 | Under the wordmark, Semibold 72 px, accent #7C5CFF: **Comment LUCID** |
-| 00:23.5 | Under that, Medium 44 px, #A1A1AA: and I'll send you the GitHub link. |
-| 00:24.0 | Bottom of the title zone, 28 px, #52525B: github.com/jedbrnth-eng/lucid-live-wallpaper |
-| 00:24.4 – 00:25.0 | Hold. Nothing moves. |
-| Sound | Music collapses to one held note at 00:22.3. Sub hit on the icon landing. Music out at 00:24.0. Last second silent. |
+| 00:19.8 | App icon (`icon/AppIcon.png`) 360 px, scales 96 % → 100 % over 10 frames. Wordmark **Lucid** under it, Semibold 80 px. |
+| 00:20.5 | Under the wordmark, Semibold 72 px, accent #7C5CFF: **Comment LUCID** |
+| 00:21.0 | Under that, Medium 44 px, #A1A1AA: and I'll send you the GitHub link. |
+| 00:21.5 | Bottom of the title zone, 28 px, #52525B: github.com/jedbrnth-eng/lucid-live-wallpaper |
+| 00:21.9 – 00:22.5 | Hold. Nothing moves. |
+| Sound | Music collapses to one held note at 00:19.8. Sub hit on the icon landing. Music out at 00:21.5. Last second silent. |
 | Why "Comment LUCID" works | Two reasons, and only one is the link. Comments are the heaviest-weighted engagement signal on TikTok and Instagram. A video with a 3 % comment rate gets pushed to the next audience tier regardless of what the comments say. The link delivery is the excuse; the comment is the product. |
 | Why the URL is still there | Trust. A person who doesn't want to comment can still type it. It is deliberately small. The big CTA is the comment. |
 | Loop | The black end card cuts back to the S01 nebula on replay. Clean loop. |
@@ -137,12 +126,11 @@ Two displays? Make cut 4 a wide of both running different wallpapers.
 7. 590+ in 4K.
 8. Space · Nature · Ocean · Cities
 9. One per screen.
-10. First reactions.
-11. Lucid
-12. Comment LUCID
-13. and I'll send you the GitHub link.
+10. Lucid
+11. Comment LUCID
+12. and I'll send you the GitHub link.
 
-Thirteen lines in 25 seconds. Adding one means cutting one.
+Twelve lines in 22.5 seconds. Adding one means cutting one.
 
 ---
 
@@ -156,9 +144,9 @@ One track, no vocals, no drums until the drop. 90–110 BPM so the 0.75 s catalo
 | Hold | 00:02.0 – 00:10 | One sustained piano note or warm pad, minor key. Second quiet layer enters at 00:06. |
 | Rise | 00:10 – 00:14.5 | Low-pass riser, tension, no resolution. |
 | Drop | 00:14.5 | Full arrangement on the Apply cut. Chord progression opens. Kick or sub pulse. |
-| Ride | 00:14.5 – 00:22.3 | Full. Duck 6 dB under the real people. |
-| Resolve | 00:22.3 – 00:24.0 | One held note. |
-| Silence | 00:24.0 – 00:25.0 | Nothing. |
+| Ride | 00:14.5 – 00:19.8 | Full through the catalog. |
+| Resolve | 00:19.8 – 00:21.5 | One held note. |
+| Silence | 00:21.5 – 00:22.5 | Nothing. |
 
 Free sources, in order of how clean the license is:
 
@@ -185,14 +173,13 @@ Practical: find three candidates on Pixabay, lay each under the rough cut, keep 
 | 00:10 – 00:14.5 | Riser | Noise riser | White noise, low-pass opening, 4.5 s. |
 | 00:14.5 | Apply cut | Whoosh + chime | Low reversed-door whoosh under a soft glass chime at −18 dB. The chime is felt, not heard. |
 | 00:16.8 – 00:19.8 | Catalog cuts | Air transients | 50 ms breathy "pf", barely audible, one per cut. |
-| 00:22.3 | Icon lands | Sub hit | Same as hook, 600 ms decay. |
+| 00:19.8 | Icon lands | Sub hit | Same as hook, 600 ms decay. |
 
 Free SFX: Freesound.org (filter License: CC0), Pixabay Sound Effects, Mixkit.
 
 ### Mix targets
 
 - −14 LUFS integrated, −1 dBTP peaks. Both platforms normalize around −14; louder gets squashed.
-- Music at −17 LUFS under the real-people audio, full at the drop.
 - High-pass everything except the sub hits at 80 Hz.
 - Check on a phone speaker. If the hook thump disappears, layer a 120 Hz hit under it; phone speakers reproduce the harmonic, not the fundamental.
 
@@ -213,10 +200,6 @@ Free SFX: Freesound.org (filter License: CC0), Pixabay Sound Effects, Mixkit.
 - 20–30° off-axis to kill reflections and moiré.
 - Dark room, one warm practical behind or beside the Mac.
 - Wipe the screen.
-
-**People**
-- Their Mac, not yours. Handheld phone, natural light.
-- On-camera consent.
 
 ---
 
@@ -245,7 +228,7 @@ Your read on the platforms is partly wrong, and it matters because the CTA depen
 | **TikTok** | Personal accounts get a clickable bio link at 1,000 followers. **Business accounts get it immediately at any follower count.** DMs containing links are frequently filtered or blocked, especially to people who don't follow you back. Comments can't hold clickable links. | Switch to a Business account today. You get the bio link, and since you're using free music anyway you lose nothing. Then "Comment LUCID" still runs for the engagement, and your reply to each comment is "link in bio, or search Lucid Live Wallpaper on GitHub." Pin a comment saying the same thing before the video gets traffic. Do not rely on DMs for delivery on TikTok. Record one "reply with video" to the first good comment; it pushes the original. |
 | **YouTube Shorts** | Links in the description and in a pinned comment work. | Pin the raw GitHub link. Keep "Comment LUCID" in the video for the engagement signal; the link is already there for anyone who looks. |
 | **X** | Posts with a link in the body get less reach. | Video in the post, link in the first reply. "Comment LUCID" works fine here too. |
-| **Reddit** | Link in the post. Reddit hates ads. | Don't post the reel as a reel. Post the install line, the GitHub link, a screenshot, and one sentence in r/macapps and r/MacOS: "I built a free open-source live 4K wallpaper app for Mac, MIT licensed, no account, no tracking." Answer every comment. The reel can go in a comment if someone asks for a demo. The Reddit thread is also where your real-user comments come from for later posts. |
+| **Reddit** | Link in the post. Reddit hates ads. | Don't post the reel as a reel. Post the install line, the GitHub link, a screenshot, and one sentence in r/macapps and r/MacOS: "I built a free open-source live 4K wallpaper app for Mac, MIT licensed, no account, no tracking." Answer every comment. The reel can go in a comment if someone asks for a demo. |
 
 The honest version of the CTA across all of this: "Comment LUCID" gets you comments everywhere, and gets the link to Instagram users automatically. Everywhere else the link is already in the bio, description or reply, and your comment replies point to it. Don't promise a DM on TikTok you can't deliver.
 
@@ -293,7 +276,6 @@ Don't make variants now. Post this cut. After 48 hours look at the 3-second hold
 ## What will kill this video
 
 - A speed-ramped install.
-- Scripted "users."
 - Apple Aerials on screen.
 - A synthetic voice.
 - AI-generated b-roll.
