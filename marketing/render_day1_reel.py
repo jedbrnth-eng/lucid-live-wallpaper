@@ -1,4 +1,5 @@
-# Graphics pass for the Day 1 reel. Usage: python3 render_day1_reel.py out.mp4 input.mp4 [preview]
+# Graphics pass for the Day 1 reel. Usage: python3 render_day1_reel.py out.mp4 [preview]
+# Inputs: src/raw2.mp4 (clean phone take, no captions), src/img1339.mov (README install B-roll), src/img1341.mov (apply B-roll).
 # Needs ffmpeg and Inter TTFs (Bold, SemiBold, Medium) in ./fonts (https://github.com/rsms/inter/releases).
 # Timings are keyed to the words in the original 31 s take; re-time the constants if the cut changes.
 import subprocess, sys
@@ -17,7 +18,12 @@ def txt(text,font,size,color,x,y,s,e,alpha=True,box=None,xexpr=None):
     if box: o += ["box=1",f"boxcolor={box}","boxborderw=26"]
     return ":".join(o)
 CX="(w-text_w)/2"
-chain=["[0:v]scale=1080:1920:flags=lanczos,format=yuv420p"]
+pre=["[0:v]scale=1080:1920:flags=lanczos,format=yuv420p[base]",
+     "[1:v]trim=1.6:3.4,setpts=PTS-STARTPTS+23.6/TB,scale=1080:1920:flags=lanczos,format=yuv420p[c1]",
+     "[2:v]trim=4.3:5.9,setpts=PTS-STARTPTS+25.4/TB,scale=1080:1920:flags=lanczos,format=yuv420p[c2]",
+     "[base][c1]overlay=eof_action=pass:enable='between(t\\,23.6\\,25.4)'[b1]",
+     "[b1][c2]overlay=eof_action=pass:enable='between(t\\,25.4\\,27.0)'[b2]"]
+chain=["[b2]null"]
 # A. DAY 1 stamp, big, hook
 chain.append(txt("DAY 1",F_B,170,WHITE,72,rise(150,0.1),0.1,3.3))
 chain.append(txt("replacing my subscriptions",F_M,44,GREY,76,rise(345,0.25),0.25,3.3))
@@ -47,6 +53,17 @@ chain.append(txt("now  $0",F_B,150,ACC,CX,980,21.9,23.9))
 # G. tags
 for i,(lab,s) in enumerate([("Open source",24.0),("MIT license",24.45),("No account",24.9),("No tracking",25.35)]):
     chain.append(txt(lab,F_M,46,WHITE,72,640+i*104,s,27.0,alpha=False,box="black@0.55"))
+# subtitles
+subs=[(0.0,0.8,"Day one."),(0.8,1.6,"Vibe coding an app"),(1.6,3.3,"so I can replace my subscriptions."),
+(3.3,4.3,"First app I made"),(4.3,6.3,"a live 4K wallpaper app for my Mac."),(6.3,9.2,"Just drag in anything"),
+(9.2,10.8,"into Downloads here."),(11.8,13.0,"Should be downloaded."),(13.0,13.9,"There we go."),
+(14.0,16.5,"Use whatever wallpaper you find online."),(16.6,18.2,"Comes with a good amount"),(18.2,20.0,"of wallpapers already."),
+(20.0,21.6,"I was paying $2 a month"),(21.6,23.6,"for a similar application."),(23.6,25.0,"Now I vibe coded my own"),
+(25.0,26.0,"open source app"),(26.0,27.0,"you guys can use as well."),(27.0,28.0,"Just comment LUCID"),
+(28.0,28.8,"to get the link."),(28.8,30.9,"Check my bio, hit my GitHub.")]
+for a,b,tx in subs:
+    chain.append(txt(tx,F_M,46,WHITE,CX,1520,a,b,alpha=False,box="black@0.38"))
+chain.append(txt("Installs in 10 seconds",F_M,44,WHITE,CX,1380,23.7,25.4,alpha=False,box="black@0.55"))
 # H. CTA
 chain.append(txt("Comment LUCID",F_B,116,WHITE,CX,rise(640,27.2),27.2,30.9))
 chain.append(txt("GitHub link in bio",F_M,52,ACC,CX,rise(800,27.35),27.35,30.9))
@@ -59,9 +76,9 @@ af=["[0:a]highpass=f=80,acompressor=threshold=-24dB:ratio=2.5:attack=8:release=1
 for i,h in enumerate(hits):
     af.append(f"aevalsrc='0.9*sin(2*PI*55*t)*exp(-7*t)+0.45*sin(2*PI*110*t)*exp(-9*t)':d=0.7:s=48000,adelay={int(h*1000)}|{int(h*1000)},volume=0.8[h{i}]")
 af.append("[voice]"+"".join(f"[h{i}]" for i in range(len(hits)))+f"amix=inputs={len(hits)+1}:normalize=0:duration=first,alimiter=limit=0.89[a]")
-open("filters.txt","w").write(vf+";"+";".join(af))
-out=sys.argv[1]; preview=len(sys.argv)>3
-cmd=["ffmpeg","-y","-v","error","-i",sys.argv[2] if len(sys.argv)>2 else "src/raw.mp4","-filter_complex_script","filters.txt","-map","[v]","-map","[a]",
+open("filters.txt","w").write(";".join(pre)+";"+vf+";"+";".join(af))
+out=sys.argv[1]; preview=len(sys.argv)>2
+cmd=["ffmpeg","-y","-v","error","-i","src/raw2.mp4","-i","src/img1339.mov","-i","src/img1341.mov","-filter_complex_script","filters.txt","-map","[v]","-map","[a]",
      "-r","30","-c:v","libx264","-preset","fast" if preview else "slow","-crf","28" if preview else "17","-pix_fmt","yuv420p","-c:a","aac","-b:a","256k","-movflags","+faststart"]
 if preview: cmd+=["-t","31"]
 subprocess.run(cmd+[out],check=True)
