@@ -2,6 +2,11 @@
 
 All notable changes to Lucid. The format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased]
+
+### Fixed
+- Apple Aerials catalog not found on macOS 26/27, where macOS moved it to `~/Library/Application Support/com.apple.wallpaper/aerials`. Lucid now checks both locations.
+
 ## [1.1.0] - 2026-10-04
 
 ### Added
@@ -20,6 +25,11 @@ All notable changes to Lucid. The format follows [Keep a Changelog](https://keep
 ### Changed
 - The source code is split from one file into feature folders under `Sources/Lucid`. No behavior change.
 - The app reports its real version (1.0.1) in Finder and About.
+
+## [Unreleased]
+
+### Fixed
+- Apple Aerials catalog not found on macOS 26/27, where macOS moved it to `~/Library/Application Support/com.apple.wallpaper/aerials`. Lucid now checks both locations.
 
 ## [1.0.0] - 2026-10-04
 First public release.

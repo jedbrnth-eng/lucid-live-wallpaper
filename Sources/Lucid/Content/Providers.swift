@@ -18,11 +18,23 @@ enum Providers {
 
     // Apple Aerials — read the system catalog macOS already ships.
     static func aerials() -> [WallItem] {
-        let root = Paths.aerialsRoot
+        let fmr = FileManager.default
+        // macOS 26+/27 keeps the catalog per-user; older macOS keeps it in /Library.
+        let newRoot = fmr.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/com.apple.wallpaper/aerials")
+        let useNew = fmr.fileExists(atPath: newRoot.appendingPathComponent("manifest/entries.json").path)
+        let root = useNew ? newRoot.appendingPathComponent("manifest") : Paths.aerialsRoot
         guard let d = try? Data(contentsOf: root.appendingPathComponent("entries.json")),
               let j = try? JSONSerialization.jsonObject(with: d) as? [String: Any],
               let assets = j["assets"] as? [[String: Any]] else { return [] }
-        let strings = (NSDictionary(contentsOf: root.appendingPathComponent("TVIdleScreenStrings.bundle/en.lproj/Localizable.nocache.strings")) as? [String: String]) ?? [:]
+        var strings = (NSDictionary(contentsOf: root.appendingPathComponent("TVIdleScreenStrings.bundle/en.lproj/Localizable.nocache.strings")) as? [String: String]) ?? [:]
+        if strings.isEmpty, let b = Bundle(url: root.appendingPathComponent("TVIdleScreenStrings.bundle")) {
+            let keys = Set(assets.compactMap { $0["localizedNameKey"] as? String }
+                + ((j["categories"] as? [[String: Any]]) ?? []).compactMap { $0["localizedNameKey"] as? String })
+            for k in keys {
+                let v = b.localizedString(forKey: k, value: nil, table: "Localizable.nocache")
+                if v != k { strings[k] = v }
+            }
+        }
         var cats: [String: String] = [:]
         for c in (j["categories"] as? [[String: Any]]) ?? [] {
             if let id = c["id"] as? String, let k = c["localizedNameKey"] as? String { cats[id] = strings[k] ?? k }
@@ -40,8 +52,9 @@ enum Providers {
                               author: place.map { "Apple · \($0)" } ?? "Apple",
                               license: "Apple macOS Aerial — personal use on this Mac; don't redistribute",
                               category: cat, fileExt: "mov")
-            let cached = root.appendingPathComponent("4KSDR240FPS/\(id).mov").path
-            if FileManager.default.isReadableFile(atPath: cached) { it.localPath = cached }
+            let cands = [newRoot.appendingPathComponent("videos/\(id).mov").path,
+                         Paths.aerialsRoot.appendingPathComponent("4KSDR240FPS/\(id).mov").path]
+            if let cached = cands.first(where: { FileManager.default.isReadableFile(atPath: $0) }) { it.localPath = cached }
             return it
         }
     }
