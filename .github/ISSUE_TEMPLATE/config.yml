@@ -1,1 +1,8 @@
 blank_issues_enabled: false
+contact_links:
+  - name: Questions and ideas
+    url: https://github.com/jedbrnth-eng/lucid-live-wallpaper/discussions
+    about: Ask a question or share an idea in Discussions.
+  - name: Report a security problem
+    url: https://github.com/jedbrnth-eng/lucid-live-wallpaper/security/advisories/new
+    about: Please report security problems privately, not in a public issue.

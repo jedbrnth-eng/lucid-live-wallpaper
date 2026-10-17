@@ -10,6 +10,14 @@ body:
     validations:
       required: true
   - type: input
+    id: version
+    attributes:
+      label: Lucid version
+      description: In Finder, select Lucid.app and choose File → Get Info.
+      placeholder: "e.g. 1.1.1"
+    validations:
+      required: true
+  - type: input
     id: macos
     attributes:
       label: macOS version

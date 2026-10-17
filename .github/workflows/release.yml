@@ -37,7 +37,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # Release notes = this version's CHANGELOG section + the install steps.
+          v="$(tr -d '[:space:]' < VERSION)"
+          awk -v h="## [$v]" 'index($0, h) == 1 {on = 1; print "## Changes in this version"; next} on && (/^## \[/ || /^\[[^]]+\]: /) {exit} on' CHANGELOG.md > notes.md
+          cat .github/release-notes.md >> notes.md
           gh release create "${{ steps.v.outputs.tag }}" Lucid.zip \
             --title "Lucid ${{ steps.v.outputs.tag }}" \
-            --notes-file .github/release-notes.md \
-            --generate-notes
+            --notes-file notes.md

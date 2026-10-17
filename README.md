@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  <a href="#install-in-10-seconds">Install</a> ·
+  <a href="#download-no-terminal-needed">Download</a> ·
   <a href="#whats-inside">Features</a> ·
   <a href="#bring-your-own">Bring your own</a> ·
   <a href="#where-the-wallpapers-come-from">Sources</a> ·
@@ -61,7 +61,7 @@ Lucid downloads, lands in your Applications folder and opens. Lucid isn't notari
 
 <br>
 
-**Download the zip.** Get `Lucid.zip` from [Releases](https://github.com/jedbrnth-eng/lucid-live-wallpaper/releases/latest), unzip it and drag **Lucid.app** to Applications. Because a browser downloaded it, macOS will warn that it can't verify the app. Fix that once with:
+**Skip the Open Anyway step.** If you downloaded the zip in a browser and prefer Terminal to System Settings, this clears macOS's download flag once:
 
 ```bash
 xattr -dr com.apple.quarantine /Applications/Lucid.app
@@ -130,7 +130,7 @@ MP4 and MOV work as they are. WebM, MKV and similar formats are converted to HEV
 
 The wallpapers belong to their creators, each under its own license, and the app shows the credit and license for every item:
 - **NASA:** generally public domain. Credit NASA, and don't imply endorsement.
-- **ESA/Webb, ESA/Hubble, ESO:** CC BY 4.0. Soundtrack music is licensed separately, so the loop maker removes audio. ESO footage of identifiable people is not for commercial use.
+- **ESA/Webb, ESA/Hubble, ESO:** CC BY 4.0. Their soundtrack music is not covered by that license, so Lucid removes the audio. ESO footage of identifiable people is not for commercial use.
 - **Wikimedia Commons:** per file (CC0, CC BY, CC BY-SA…). Credit the author if you share a file.
 - **Apple Aerials:** Apple content that ships with macOS, for personal use on your Mac only. It is never bundled or redistributed.
 - **Pixabay:** free to use, but files must not be redistributed as-is.
