@@ -31,11 +31,6 @@ All notable changes to Lucid. The format follows [Keep a Changelog](https://keep
 - The source code is split from one file into feature folders under `Sources/Lucid`. No behavior change.
 - The app reports its real version (1.0.1) in Finder and About.
 
-## [Unreleased]
-
-### Fixed
-- Apple Aerials catalog not found on macOS 26/27, where macOS moved it to `~/Library/Application Support/com.apple.wallpaper/aerials`. Lucid now checks both locations.
-
 ## [1.0.0] - 2026-10-04
 First public release.
 
@@ -47,3 +42,9 @@ First public release.
 - My Library: import your own videos and photos by drag and drop, **Import…**, or by dropping files into the Lucid folder. WebM, MKV and similar formats are converted to HEVC.
 - Per-display wallpapers, playlists, favorites, auto-change timer and open at login.
 - Battery-friendly playback: pauses when covered, in Low Power Mode, on battery, when locked or the display sleeps.
+
+[Unreleased]: https://github.com/jedbrnth-eng/lucid-live-wallpaper/compare/v1.1.1...HEAD
+[1.1.1]: https://github.com/jedbrnth-eng/lucid-live-wallpaper/compare/v1.1.0...v1.1.1
+[1.1.0]: https://github.com/jedbrnth-eng/lucid-live-wallpaper/compare/v1.0.1...v1.1.0
+[1.0.1]: https://github.com/jedbrnth-eng/lucid-live-wallpaper/compare/v1.0.0...v1.0.1
+[1.0.0]: https://github.com/jedbrnth-eng/lucid-live-wallpaper/releases/tag/v1.0.0

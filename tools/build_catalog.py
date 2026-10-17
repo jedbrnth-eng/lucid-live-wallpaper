@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build Lucid' curated 4K LIVE-wallpaper catalog.
 
-Sources (all keyless, all license-checked; see SOURCES.md / live-wallpaper-sources.md):
+Sources (all keyless, all license-checked; see SOURCES.md):
   - ESA/Webb + ESA/Hubble  (CC BY 4.0)        esawebb.org / esahubble.org
   - ESO                    (CC BY 4.0)        eso.org/public/videos
   - NASA SVS               (public domain)    svs.gsfc.nasa.gov/api

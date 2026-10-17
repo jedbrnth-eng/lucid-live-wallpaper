@@ -1,8 +1,30 @@
-# Wallpaper content sources for a personal 4K macOS wallpaper app
+# Wallpaper sources and licenses
 
-Researched 2026-10-02. "Live" means a keyless call was made during this research. Key-gated APIs (Pexels, Pixabay, Unsplash, Coverr) were **not** called with keys. For those, the facts come only from official docs.
+Lucid ships no wallpaper media. `catalog.json` is a list of links and credits; the app downloads each clip from its original source onto your Mac and shows its credit and license. This page lists where the content comes from, the terms that apply, and the sources that were researched and not used.
 
-## Summary
+## Sources Lucid uses
+
+| Source | What Lucid uses | License / terms | How Lucid follows them |
+|---|---|---|---|
+| [ESA/Webb](https://esawebb.org/copyright/) | Videos (152 in the Live 4K catalog) | CC BY 4.0. Music is not covered. | Credit and license shown per item; audio removed. |
+| [ESA/Hubble](https://esahubble.org/copyright/) | Videos (105) | CC BY 4.0. Music is not covered. | Same as ESA/Webb. |
+| [ESO](https://www.eso.org/public/copyright/) | Videos (84) | CC BY 4.0. Images of identifiable people may not be used commercially. | Credit and license shown per item; audio removed. |
+| [NASA](https://www.nasa.gov/nasa-brand-center/images-and-media/) | Videos (21) and 4K stills | Generally not subject to US copyright. Credit NASA, don't imply endorsement; items marked as third-party copyrighted are excluded. | Credit shown per item. |
+| [Wikimedia Commons](https://commons.wikimedia.org/wiki/Commons:Reusing_content_outside_Wikimedia) | Videos (232) and 4K stills | Per file. | Author and license shown per item. The Live 4K catalog only includes CC0, public domain, CC BY and CC BY-SA files. |
+| Apple Aerials | Apple's aerial films on your Mac, or downloaded from Apple when you pick one | Apple content that comes with macOS; the macOS license covers personal, non-commercial use on your own Mac. | Never bundled or re-hosted. |
+| [Pixabay](https://pixabay.com/service/license-summary/) (optional) | 4K videos, only if you add your own free API key | Free to use; files must not be redistributed as they are. | Off by default. Your key is stored in the macOS Keychain. |
+
+Counts are for the current `catalog.json` (594 clips). Every listed item is 3840×2160 or larger.
+
+The loops Lucid makes are modified (cross-faded, re-encoded) copies for personal use on your own Mac. If you republish any of them, follow that item's license, including attribution, share-alike and noting the changes.
+
+**Not used:** Pexels and Unsplash (their API guidelines forbid wallpaper apps), Coverr (its license forbids similar services), Mixkit (no API) and the Backdrop community library (no rights granted outside that app). Details below.
+
+## Research notes
+
+Researched 2026-10-02. "Live" means a keyless call was made during this research. Key-gated APIs (Pexels, Pixabay, Unsplash, Coverr) were **not** called with keys. For those, the facts come only from official docs. This is a reading of each source's published terms, not legal advice.
+
+### Summary
 
 | Source | 4K static | 4K video | Auth | Guarantee 4K via | Verdict |
 |---|---|---|---|---|---|
@@ -21,7 +43,7 @@ Researched 2026-10-02. "Live" means a keyless call was made during this research
 ### 1. Apple Aerials (sylvan.apple.com)
 - **4K:** The public `resources-16.tar` contains `entries.json` with 114 assets that have `url-4K-SDR` and `url-4K-HDR` keys pointing to `…_SDR_4K_HEVC.mov` files.[1] A live `HEAD` request for one of them returned `200`, `video/quicktime`, ~347 MB, with no auth.[1] The Mac's local `idleassetsd` entries.json (138 assets, `url-4K-SDR-240FPS`) is the newer catalog. Treat any key containing `4K` as ≥3840×2160 and confirm with ffprobe.
 - **Auth/limits:** None. No documented rate limit.
-- **License:** I found no public licence for the Aerial videos. They come with macOS, and the macOS SLA grants use "for personal, non-commercial use" of the Apple Software on Macs you own.[2] Showing them as your own wallpaper on your own Mac is consistent with that. Redistributing them, or bundling them in a shared app, is not. That reading is my inference.
+- **License:** I found no public licence for the Aerial videos. They come with macOS, and the macOS SLA grants use "for personal, non-commercial use" of the Apple Software on Macs you own.[2] Showing them as your own wallpaper on your own Mac is consistent with that. Redistributing them, or bundling them in a shared app, is not.
 - **Verdict: MEETS 4K bar (video only).** Low risk for personal use. Prefer files macOS has already downloaded, and never re-host them.
 
 ### 2. Wikimedia Commons
@@ -34,7 +56,7 @@ Researched 2026-10-02. "Live" means a keyless call was made during this research
 - **4K:** Photo `width`/`height` give "the real width of the photo in pixels", and `src.original` is the full file. Search supports `size=large` (24 MP).[6] For video, `size=large` means 4K, and each `video_files[]` entry has `width`, `height`, `fps`, `link` and `quality`.[6] Choose the entry with `width>=3840`.
 - **Auth/limits:** A free API key is required. Without one, a live call returned `401`. The default limit is 200 requests/hour and 20,000/month.[6] Rate-limit increases are "currently paused".[8]
 - **License:** The licence is free and needs no attribution. It does forbid redistributing content "on other stock photo or wallpaper platforms".[7] The API guidelines require a prominent Pexels link and photographer credit, and say: "You may not copy or replicate core functionality of Pexels (including making Pexels content available as a wallpaper app)."[6]
-- **Verdict: PARTIAL.** The content meets 4K, but the API terms target wallpaper apps by name. A private, single-user tool is a grey area. Safest: use it manually or sparingly, with credit in the UI, and never ship it publicly.
+- **Verdict: PARTIAL.** The content meets 4K, but the API terms target wallpaper apps by name. Lucid does not use Pexels.
 
 ### 4. Pixabay (photos + videos)
 - **4K photos:** `largeImageURL` is a "scaled image with a maximum width/height of 1280px". `fullHDURL` (1920 px), `imageURL` (original) and `imageWidth`/`imageHeight` are "only available if your account has been approved for full API access".[9] Without approval, the API cannot deliver 4K stills. `min_width`/`min_height` filters exist.[9]
@@ -65,19 +87,19 @@ Researched 2026-10-02. "Live" means a keyless call was made during this research
 ### 8. Mixkit (video, Envato)
 - **License:** Clips under the Free License may be downloaded, copied and modified without attribution.[19] Clips under the Restricted License are for personal projects only, which still covers a personal wallpaper.[20]
 - **API:** I found no public API. Download manually.
-- **Verdict: PARTIAL.** Good hand-curated 4K loops, but no programmatic access.
+- **Verdict: PARTIAL.** Good hand-curated 4K loops, but no programmatic access, so Lucid does not use it.
 
 *Videvo:* licence pages returned 403/404 during research, so it was not assessed.
 
-## Backdrop (Cindori) library
+### 9. Backdrop (Cindori) library
 Backdrop's catalog is "thousands of animated wallpapers created and shared by the [Backdrop] community". Without a purchase, the trial is limited to three watermarked Backdrops. Paying "unlocks unlimited access to the entire Backdrop community platform".[25] Cindori's guide says Backdrop's review is not "a universal copyright guarantee" and that uploaders need redistribution rights.[27] Submissions go into "the public Backdrop collection".[28] I found no general Terms of Use that grant rights to the library. The only published EULA covers the software and says all copyrights in it belong to Cindori AB.[26]
 
-**Bottom line:** the library is a subscriber feature of Cindori's service, and neither Cindori nor the individual uploaders have granted any rights outside it. Do not extract, cache or reuse Backdrop videos (including the ones it injects into the Aerials `entries.json`) in the new app. Only clips Jed made himself can carry over.
+**Bottom line:** the library is a subscriber feature of Cindori's service, and neither Cindori nor the individual uploaders have granted any rights outside it. Lucid does not use Backdrop videos, including the ones Backdrop adds to the Aerials `entries.json`.
 
-## Recommended stack
-Apple Aerials (from local macOS) + NASA + Wikimedia Commons (licence-filtered, attributed) as keyless 4K sources. Use Pixabay video (`videos.large.width>=3840`) only if Jed accepts getting a free key. Pull Mixkit clips in by hand. Avoid automated Unsplash or Pexels ingestion.
+### Outcome
+Keyless 4K sources: ESA/Webb, ESA/Hubble and ESO (CC BY 4.0, see the table above), NASA, Wikimedia Commons (license-filtered, attributed) and Apple Aerials from macOS. Pixabay video is optional with the user's own key. No Unsplash or Pexels.
 
-## Sources
+## References
 
 [1] https://sylvan.apple.com/Aerials/resources-16.tar — Apple Aerials resources-16.tar (entries.json)
 [2] https://www.apple.com/legal/sla/docs/macOSSequoia.pdf — macOS Sequoia SLA
