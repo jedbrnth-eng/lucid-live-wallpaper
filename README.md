@@ -31,6 +31,19 @@
 
 ---
 
+<p align="center">
+  <a href="https://github.com/jedbrnth-eng/lucid-live-wallpaper/releases/latest/download/Lucid.zip"><img src="https://img.shields.io/badge/%E2%AC%87%20Download%20Lucid%20for%20Mac-Free-7c5cff?style=for-the-badge&logo=apple&logoColor=white" alt="Download Lucid for Mac, free" height="56"></a><br>
+  <sub>Free · Apple Silicon (M1 or newer) · macOS 14+ · about 2 MB</sub>
+</p>
+
+## Download (no Terminal needed)
+
+1. Click the big **Download Lucid for Mac** button above. A file called `Lucid.zip` lands in your Downloads folder.
+2. Double-click `Lucid.zip`, then drag **Lucid.app** into your **Applications** folder.
+3. Open Lucid. macOS will say it can't verify the app, because Lucid isn't notarized by Apple yet. Click **Done**, open **System Settings → Privacy & Security**, scroll down and click **Open Anyway** next to Lucid, then confirm. You only do this once.
+
+Prefer one command instead? Use the installer below.
+
 ## Install in 10 seconds
 
 Open **Terminal** (press `⌘ Space`, type `Terminal`, press Return), paste this line, and press Return:
