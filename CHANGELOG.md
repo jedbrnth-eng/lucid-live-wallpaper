@@ -4,6 +4,11 @@ All notable changes to Lucid. The format follows [Keep a Changelog](https://keep
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-10-17
+
+### Added
+- README: a one-click Download button and plain install steps (no Terminal needed).
+
 ### Fixed
 - Apple Aerials catalog not found on macOS 26/27, where macOS moved it to `~/Library/Application Support/com.apple.wallpaper/aerials`. Lucid now checks both locations.
 
