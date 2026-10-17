@@ -17,6 +17,7 @@
 </p>
 
 <p align="center">
+  <a href="https://lucid-wallpaper.vercel.app"><b>Website</b></a> ·
   <a href="#download-no-terminal-needed">Download</a> ·
   <a href="#whats-inside">Features</a> ·
   <a href="#bring-your-own">Bring your own</a> ·
