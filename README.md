@@ -13,7 +13,7 @@
   <img src="https://img.shields.io/badge/macOS-14%2B-000000?logo=apple&logoColor=white" alt="macOS 14+">
   <img src="https://img.shields.io/badge/Apple%20Silicon-arm64-555555" alt="Apple Silicon">
   <img src="https://img.shields.io/badge/Swift-5-F05138?logo=swift&logoColor=white" alt="Swift 5">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT license"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-blue" alt="GPL-3.0 license"></a>
 </p>
 
 <p align="center">
@@ -175,6 +175,8 @@ Issues and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md). Re
 
 ## License
 
-The code is [MIT](LICENSE) licensed. Wallpaper content stays under its creators' licenses, as above.
+Lucid is free software under the [GNU GPL v3.0](LICENSE), © 2026 Jed Brown. You can use it, study it, change it and share it. If you pass it on, modified or not, you must keep the copyright and credit to Jed Brown, release your full source under GPL-3.0 too, and say what you changed. Wallpaper content stays under its creators' licenses, as above.
+
+Want to improve it? Please send your changes here as a pull request instead of making a separate copy ([CONTRIBUTING.md](CONTRIBUTING.md)). The Lucid name and icon are not covered by the license, so a fork needs its own.
 
 *Not affiliated with or endorsed by Apple, NASA, ESA, ESO, Wikimedia or Pixabay.*
