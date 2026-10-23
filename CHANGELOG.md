@@ -4,6 +4,8 @@ All notable changes to Lucid. The format follows [Keep a Changelog](https://keep
 
 ## [Unreleased]
 
+- License changed from MIT to GPL-3.0 for all new work. Versions released before this change stay available under MIT.
+
 ## [1.1.1] - 2026-10-17
 
 ### Added
