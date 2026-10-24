@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Jed Brown
+// SPDX-License-Identifier: GPL-3.0-only
+// Part of Lucid: https://github.com/jedbrnth-eng/lucid-live-wallpaper
+
 // File locations under ~/Library/Application Support/Lucid.
 import SwiftUI
 import AppKit
