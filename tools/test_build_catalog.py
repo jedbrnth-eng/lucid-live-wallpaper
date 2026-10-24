@@ -1,3 +1,7 @@
+# Copyright (c) 2026 Jed Brown
+# SPDX-License-Identifier: GPL-3.0-only
+# Part of Lucid: https://github.com/jedbrnth-eng/lucid-live-wallpaper
+
 """Offline unit tests for build_catalog.py (no network). Run: python3 -m unittest tools/test_build_catalog.py"""
 import os
 import sys

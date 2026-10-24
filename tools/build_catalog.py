@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 Jed Brown
+# SPDX-License-Identifier: GPL-3.0-only
+# Part of Lucid: https://github.com/jedbrnth-eng/lucid-live-wallpaper
+
 """Build Lucid' curated 4K LIVE-wallpaper catalog.
 
 Sources (all keyless, all license-checked; see SOURCES.md):

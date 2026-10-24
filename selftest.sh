@@ -1,4 +1,8 @@
 #!/bin/bash
+# Copyright (c) 2026 Jed Brown
+# SPDX-License-Identifier: GPL-3.0-only
+# Part of Lucid: https://github.com/jedbrnth-eng/lucid-live-wallpaper
+
 # Headless self-test: runs the real app with -selftest, waits for its JSON report.
 cd "$(dirname "$0")"
 S="$HOME/Library/Application Support/Lucid"
