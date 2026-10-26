@@ -60,6 +60,7 @@ struct SettingsView: View {
                     Text("Dimming keeps desktop icons and widgets readable on bright wallpapers. Slower speed = calmer motion and less GPU.").font(.caption).foregroundStyle(.secondary)
                 }.frame(maxWidth: .infinity, alignment: .leading).padding(6)
             }
+            HotkeySettingsSection()
             AudioSettingsSection()
             DayNightSettingsSection()
             GroupBox("Adding wallpapers") {

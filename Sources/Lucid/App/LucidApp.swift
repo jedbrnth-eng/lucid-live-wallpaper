@@ -26,6 +26,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             store.engine.refresh()
             if UserDefaults.standard.bool(forKey: "lucidCheck") { Task { @MainActor in await DevCheck.run(store) }; return }
             store.startDownloadsWatcher()
+            HotkeyCenter.shared.handler = { action in
+                switch action {
+                case .pauseResume: store.engine.togglePause()
+                case .next: store.next()
+                case .previous: store.previous()
+                }
+            }
+            HotkeyCenter.shared.apply()
             let args = UserDefaults.standard
             if args.bool(forKey: "selftest") {
                 Task { @MainActor in
@@ -84,12 +92,12 @@ struct LucidApp: App {
         }
         .defaultSize(width: 1240, height: 800)
         Settings {
-            SettingsView().environmentObject(store).environmentObject(store.engine)
+            SettingsView().environmentObject(store).environmentObject(store.engine).environmentObject(HotkeyCenter.shared)
                 .environmentObject(store.audio).environmentObject(store.dayNight)
                 .frame(width: 560).padding(20).preferredColorScheme(.dark)
         }
         MenuBarExtra("Lucid", systemImage: "sparkles.tv") {
-            MenuContent().environmentObject(store).environmentObject(store.engine).environmentObject(store.audio)
+            MenuContent().environmentObject(store).environmentObject(store.engine).environmentObject(store.audio).environmentObject(HotkeyCenter.shared)
         }
     }
 }

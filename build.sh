@@ -14,7 +14,7 @@ while IFS= read -r f; do SOURCES+=("$f"); done < <(find Sources/Lucid -name '*.s
 swiftc -O -parse-as-library -swift-version 5 -target arm64-apple-macosx14.0 \
   -framework SwiftUI -framework AppKit -framework AVKit -framework AVFoundation \
   -framework IOKit -framework ServiceManagement -framework Security \
-  -framework CoreAudio -framework AudioToolbox -framework Accelerate -framework CoreLocation \
+  -framework CoreAudio -framework AudioToolbox -framework Accelerate -framework CoreLocation -framework Carbon \
   "${SOURCES[@]}" -o "$APP/Contents/MacOS/Lucid"
 cp Info.plist "$APP/Contents/Info.plist"
 [ -f AppIcon.icns ] && cp AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"

@@ -79,6 +79,17 @@ import AppKit
             r["windows_after_clear"] = engine.surfaces.count
         }
         await importChecks(store, &r)
+        // 6. Global shortcuts (dev bundle's own defaults): enable, check all three registered, a second claim of the
+        //    same combination is refused by macOS, then turn them off again.
+        let hk = HotkeyCenter.shared
+        var b = HotkeyBindings.defaults; b.enabled = true
+        hk.update(b)
+        r["hotkeys_registered"] = hk.registeredCount
+        r["hotkeys_problems"] = hk.problems.map { "\($0.key.rawValue): \($0.value)" }
+        if let k = b.binding(.next) { r["hotkeys_second_claim_status"] = Int(HotkeyCenter.probe(k)) }
+        var off = b; off.enabled = false
+        hk.update(off)
+        r["hotkeys_registered_after_off"] = hk.registeredCount
         r["phase_now"] = store.dayNight.phase.rawValue
         r["next_change"] = store.dayNight.nextChange.map { ISO8601DateFormatter().string(from: $0) } ?? NSNull()
         r["day_night_source"] = store.dayNight.sourceText

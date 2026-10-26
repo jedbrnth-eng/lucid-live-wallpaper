@@ -16,6 +16,11 @@ import ImageIO
 struct MenuContent: View {
     @EnvironmentObject var engine: LucidEngine
     @EnvironmentObject var store: Store
+    @EnvironmentObject var hotkeys: HotkeyCenter
+    private func hint(_ a: HotkeyAction) -> String {
+        guard hotkeys.bindings.enabled, hotkeys.problems[a] == nil, let k = hotkeys.bindings.binding(a) else { return "" }
+        return "    " + k.label
+    }
     @Environment(\.openWindow) private var openWindow
     var body: some View {
         Text(engine.currentAssignments.first?.title ?? "No wallpaper set")
@@ -23,9 +28,9 @@ struct MenuContent: View {
         Divider()
         if let p = store.activePlaylist { Text("Playlist: \(p.name)") }
         Divider()
-        Button(engine.state.userPaused ? "Resume" : "Pause") { engine.togglePause() }
-        Button("Next Wallpaper") { store.next() }
-        Button("Previous Wallpaper") { store.previous() }
+        Button((engine.state.userPaused ? "Resume" : "Pause") + hint(.pauseResume)) { engine.togglePause() }
+        Button("Next Wallpaper" + hint(.next)) { store.next() }
+        Button("Previous Wallpaper" + hint(.previous)) { store.previous() }
         if let c = store.currentItem {
             Button(store.isFavorite(c.id) ? "Unfavorite Current" : "♥ Favorite Current") { store.toggleFavorite(c) }
         }
