@@ -242,6 +242,7 @@ import AppKit
             return "rendered"
         }
         r["render_settings"] = render("settings", ScrollView { SettingsView() })
+        if let dir = ProcessInfo.processInfo.environment["LUCID_CHECK_SHOTS"] { shots(store, URL(fileURLWithPath: dir, isDirectory: true), &r) }
         r["render_displays"] = render("displays", DisplaysView())
         r["render_menu"] = render("menu", VStack { MenuContent() })
         r["render_library"] = render("library", LibraryView(mode: .downloaded))
@@ -250,6 +251,46 @@ import AppKit
             r["render_weather_sheet"] = render("weather", WeatherSheet(target: DNTarget(screenKey: nil, name: w.localizedName)))
             r["render_daynight_sheet"] = render("daynight", DayNightSheet(target: DNTarget(screenKey: nil, name: w.localizedName)))
         }
+    }
+
+    /// Optional (LUCID_CHECK_SHOTS=<dir>): PNGs of the new screens, rendered off-screen with real app state.
+    private static func shots(_ store: Store, _ dir: URL, _ r: inout [String: Any]) {
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        // Real state for the pictures: a Day/Night rule with a dawn wallpaper, a weather rule, a playing playlist.
+        if let p = store.playlists.first { store.playPlaylist(p.id) }
+        let imgs = store.library.filter { $0.kind == .image && $0.isLocalReady }
+        if imgs.count >= 3, let d = store.readyAssignment(for: imgs[0]), let n = store.readyAssignment(for: imgs[1]), let a = store.readyAssignment(for: imgs[2]) {
+            store.engine.applyDayNight(DayNightRule(day: d, night: n, dawn: a), screenKey: NSScreen.screens.first?.stableKey)
+            store.engine.setWeather(WeatherRule(map: [.rain: a, .snow: n]), screenKey: nil)
+        }
+        defer { store.stopPlaylist(); store.engine.setWeather(WeatherRule(map: [:]), screenKey: nil); store.engine.clear(screenKey: nil) }
+        func shot<V: View>(_ name: String, _ v: V, width: CGFloat, height: CGFloat? = nil) {
+            let root = v.lucidEnvironment(store).preferredColorScheme(.dark).frame(width: width).background(Color(white: 0.11))
+            let host = NSHostingView(rootView: root)
+            let size = NSSize(width: width, height: height ?? min(4000, max(200, host.fittingSize.height)))
+            let win = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.borderless], backing: .buffered, defer: false)
+            win.appearance = NSAppearance(named: .darkAqua)
+            win.contentView = host
+            host.frame = NSRect(origin: .zero, size: size)
+            host.layoutSubtreeIfNeeded()
+            guard let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds) else { return }
+            host.cacheDisplay(in: host.bounds, to: rep)
+            if let png = rep.representation(using: .png, properties: [:]) {
+                try? png.write(to: dir.appendingPathComponent(name + ".png"))
+                r["shot_" + name] = "\(Int(size.width))x\(Int(size.height))"
+            }
+            win.contentView = nil
+        }
+        shot("settings-full", SettingsView().padding(24), width: 640)
+        shot("displays", DisplaysView(), width: 1100, height: 760)
+        if let w = NSScreen.screens.first {
+            shot("weather-sheet", WeatherSheet(target: DNTarget(screenKey: nil, name: "All Displays")), width: 540)
+            shot("daynight-sheet", DayNightSheet(target: DNTarget(screenKey: w.stableKey, name: w.localizedName)), width: 540)
+        }
+        if let p = store.playlists.first { shot("playlist", PlaylistView(id: p.id), width: 1100, height: 520) }
+        if let it = store.library.first(where: { $0.kind == .video }) ?? store.library.first { shot("detail-options", DetailView(item: it), width: 820) }
+        shot("library", LibraryView(mode: .downloaded), width: 1100, height: 700)
+        shot("menu-bar-menu", VStack(alignment: .leading, spacing: 6) { MenuContent() }.padding(12), width: 360)
     }
 
     private static func finish(_ r: [String: Any]) {

@@ -69,7 +69,9 @@ struct DisplaysView: View {
                                         .font(.caption2).foregroundStyle(.secondary)
                                 }
                                 if let (r, scope) = engine.rule(for: s) {
-                                    Text("Day/Night\(scope == EngineState.allKey ? " (all displays)" : ""): ☀︎ \(r.day.title) · ☾ \(r.night.title) · switches \(shortTime(dayNight.nextChange))")
+                                    Text("Day/Night\(scope == EngineState.allKey ? " (all displays)" : ""): ☀︎ \(r.day.title) · ☾ \(r.night.title)"
+                                         + (r.dawn.map { " · dawn \($0.title)" } ?? "") + (r.dusk.map { " · dusk \($0.title)" } ?? "")
+                                         + " · now \(dayNight.part.rawValue) · switches \(shortTime(dayNight.nextChange))")
                                         .font(.caption2).foregroundStyle(.secondary)
                                 } else {
                                     Text(engine.state.perScreen[s.stableKey] != nil ? "Set for this display only" : "Following “All Displays”")
