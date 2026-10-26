@@ -91,6 +91,7 @@ import AppKit
             r["windows_after_clear"] = engine.surfaces.count
         }
         await importChecks(store, &r)
+        await weatherChecks(store, &r)
         // 6. Global shortcuts (dev bundle's own defaults): enable, check all three registered, a second claim of the
         //    same combination is refused by macOS, then turn them off again.
         let hk = HotkeyCenter.shared
@@ -183,6 +184,45 @@ import AppKit
         store.engine.clear(screenKey: nil)
         await wait(0.3)
         r["playlist_windows_after_stop"] = store.engine.surfaces.count
+    }
+
+    /// 7. Weather: a rain wallpaper overrides while it "rains", the normal one returns when clear, a stale reading
+    ///    is ignored, and an unreachable server fails quietly with back-off (no real weather request is made unless
+    ///    LUCID_CHECK_NETWORK=1, which also does one live Open-Meteo fetch).
+    private static func weatherChecks(_ store: Store, _ r: inout [String: Any]) async {
+        let e = store.engine
+        guard let main = NSScreen.screens.first, let base = makePNG(.systemGray, "check-base.png"), let wet = makePNG(.systemBlue, "check-rain.png") else { return }
+        let normal = Assignment(itemID: "check-base", title: "Base", path: base.path, kind: .image)
+        let rainA = Assignment(itemID: "check-rain", title: "Rain", path: wet.path, kind: .image)
+        e.apply(normal, screenKey: nil)
+        e.setWeather(WeatherRule(map: [.rain: rainA]), screenKey: nil)
+        let real = e.weatherNow
+        e.weatherNow = { .rain }; e.weatherDidChange()
+        await wait(LucidEngine.crossfade + 0.6)
+        r["weather_rain_shows"] = e.surfaces[main.stableKey]?.assignment.itemID ?? NSNull()
+        e.weatherNow = { .clear }; e.weatherDidChange()
+        await wait(LucidEngine.crossfade + 0.6)
+        r["weather_clear_shows"] = e.assignment(for: main)?.itemID ?? NSNull()
+        e.weatherNow = real
+        r["weather_stale_or_off_condition"] = store.weather.activeCondition?.rawValue ?? "none"
+        if let bad = URL(string: "https://127.0.0.1:9/v1/forecast") {
+            let before = store.weather.fetchState.failures
+            await store.weather.fetch(url: bad)
+            r["weather_offline_failures_added"] = store.weather.fetchState.failures - before
+            r["weather_offline_error"] = store.weather.lastError ?? NSNull()
+            r["weather_offline_backoff_blocks_retry"] = !WeatherPolicy.shouldFetch(store.weather.fetchState, now: Date())
+        }
+        if ProcessInfo.processInfo.environment["LUCID_CHECK_NETWORK"] == "1" {
+            let (lat, lon) = WeatherService.coordinates()
+            let u = WeatherRequest.url(latitude: lat, longitude: lon)
+            r["weather_live_url"] = u.absoluteString
+            await store.weather.fetch(url: u)
+            r["weather_live_condition"] = store.weather.condition?.rawValue ?? NSNull()
+            r["weather_live_error"] = store.weather.lastError ?? NSNull()
+        }
+        e.setWeather(WeatherRule(map: [:]), screenKey: nil)
+        e.clear(screenKey: nil)
+        await wait(0.3)
     }
 
     private static func finish(_ r: [String: Any]) {

@@ -63,6 +63,7 @@ struct SettingsView: View {
             HotkeySettingsSection()
             AudioSettingsSection()
             DayNightSettingsSection()
+            WeatherSettingsSection()
             GroupBox("Adding wallpapers") {
                 VStack(alignment: .leading, spacing: 8) {
                     Toggle("Auto-add 4K videos and photos I download to ~/Downloads", isOn: $watch)

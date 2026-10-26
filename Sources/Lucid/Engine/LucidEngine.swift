@@ -41,6 +41,8 @@ import ImageIO
     var phase: () -> DayPhase = { .day }
     /// Current four-phase part (dawn/day/dusk/night), set by DayNightController.
     var part: () -> DayPart = { .day }
+    /// Current weather when Weather wallpapers are on and the reading is fresh (set by WeatherService).
+    var weatherNow: () -> WeatherCondition? = { nil }
     /// Called when audio capture becomes needed / not needed (some running wallpaper reacts to sound).
     var onAudioNeedChanged: ((Bool) -> Void)?
     private(set) var audioNeeded = false
@@ -66,7 +68,16 @@ import ImageIO
     }
     var hasDayNightRules: Bool { !(state.dayNight ?? [:]).isEmpty }
 
+    /// The weather rule for a display: its own, else the all-displays one if the display follows "All Displays".
+    func weatherRule(for screen: NSScreen) -> WeatherRule? {
+        let k = screen.stableKey
+        if let r = state.weather?[k] { return r }
+        if state.perScreen[k] != nil || state.dayNight?[k] != nil { return nil }
+        return state.weather?[EngineState.allKey]
+    }
+
     func assignment(for screen: NSScreen) -> Assignment? {
+        if let w = weatherRule(for: screen)?.pick(weatherNow()) { return w }
         if let r = rule(for: screen) { return r.rule.pick(phase(), part: part()) }
         return state.perScreen[screen.stableKey] ?? state.all
     }
@@ -107,8 +118,22 @@ import ImageIO
         updateDesktopPictures()
     }
 
+    /// Weather wallpapers for one display or (nil) all displays; an empty rule removes it.
+    func setWeather(_ r: WeatherRule, screenKey: String?) {
+        let k = screenKey ?? EngineState.allKey
+        var w = state.weather ?? [:]
+        w[k] = r.map.isEmpty ? nil : r
+        state.weather = w.isEmpty ? nil : w
+        save(); weatherDidChange()
+    }
+    func weatherDidChange() {
+        refresh()
+        for s in NSScreen.screens where weatherRule(for: s) != nil { if let a = assignment(for: s) { setDesktopPicture(a, [s]) } }
+    }
+
     func clear(screenKey: String?) {
         if let k = screenKey {
+            state.weather?[k] = nil
             if state.dayNight?[k] != nil { state.dayNight?[k] = nil }
             else if state.perScreen[k] != nil { state.perScreen[k] = nil }
             else {
@@ -121,12 +146,13 @@ import ImageIO
                 state.all = nil
                 state.dayNight?[EngineState.allKey] = nil
             }
-        } else { state.all = nil; state.perScreen = [:]; state.dayNight = nil }
+        } else { state.all = nil; state.perScreen = [:]; state.dayNight = nil; state.weather = nil }
         save(); refresh()
     }
 
     func forget(path: String) {
         if state.all?.path == path { state.all = nil }
+        state.weather = state.weather?.mapValues { WeatherRule(map: $0.map.filter { $0.value.path != path }) }.filter { !$0.value.map.isEmpty }
         state.perScreen = state.perScreen.filter { $0.value.path != path }
         state.dayNight = state.dayNight?.filter { $0.value.day.path != path && $0.value.night.path != path }.mapValues { r in
             var r = r
@@ -197,7 +223,7 @@ import ImageIO
     private func needsSurface(_ a: Assignment, _ screen: NSScreen) -> Bool {
         switch a.kind {
         case .video: return true
-        case .image: return (a.reactive?.any ?? false) || rule(for: screen) != nil || playlistGoverns(screen)
+        case .image: return (a.reactive?.any ?? false) || rule(for: screen) != nil || playlistGoverns(screen) || weatherRule(for: screen) != nil
         }
     }
     /// Scopes ("*" or display keys) with a playing playlist: their stills get a window too, so changes cross-fade.
@@ -414,7 +440,7 @@ import ImageIO
         let j: [String: Any] = ["at": Date().timeIntervalSince1970, "pauseReason": pauseReason ?? NSNull(),
                                 "onBattery": power.onBattery, "batteryPercent": power.batteryPercent ?? NSNull(), "lowPower": power.lowPower,
                                 "locked": power.locked, "thermal": power.thermal.rawValue, "cpuBusy": power.cpuBusy, "parked": parked,
-                                "statusText": statusText, "phase": phase().rawValue, "part": part().rawValue,
+                                "statusText": statusText, "weather": weatherNow()?.rawValue ?? NSNull(), "phase": phase().rawValue, "part": part().rawValue,
                                 "audioNeeded": audioNeeded, "fading": fading.count, "screens": screens]
         if let d = try? JSONSerialization.data(withJSONObject: j, options: [.prettyPrinted, .sortedKeys]) { try? d.write(to: Paths.status) }
     }

@@ -19,6 +19,7 @@ struct DisplaysView: View {
     @EnvironmentObject var audio: AudioReactive
     @EnvironmentObject var dayNight: DayNightController
     @State private var dnTarget: DNTarget?
+    @State private var weatherTarget: DNTarget?
 
     private func reactiveToggle(_ title: String, _ kp: WritableKeyPath<ReactiveOptions, Bool>, _ s: NSScreen) -> some View {
         Toggle(title, isOn: Binding(get: { engine.reactive(for: s)[keyPath: kp] },
@@ -38,6 +39,8 @@ struct DisplaysView: View {
                     }
                     Button { store.next() } label: { Label("Random from Library", systemImage: "shuffle") }
                     Button { dnTarget = DNTarget(screenKey: nil, name: "All Displays") } label: { Label("Day/Night for All…", systemImage: "sun.and.horizon") }
+                    Button { weatherTarget = DNTarget(screenKey: nil, name: "All Displays") } label: { Label("Weather…", systemImage: "cloud.sun.rain") }
+                        .help("Show a different wallpaper when it rains, snows, is clear or cloudy")
                     if let r = engine.pauseReason { Text("Paused: \(r)").foregroundStyle(.orange) }
                 }
                 if !Pref.audioReactive && engine.currentAssignments.contains(where: { $0.reactive?.any ?? false }) {
@@ -60,6 +63,11 @@ struct DisplaysView: View {
                                 Label(a.kind == .image ? "Still image" : (paused.map { "Paused — \($0)" } ?? "Playing live"),
                                       systemImage: a.kind == .image ? "photo" : (paused == nil ? "play.circle.fill" : "pause.circle"))
                                     .foregroundStyle(a.kind == .image ? Color.secondary : (paused == nil ? accent : .orange)).font(.caption)
+                                if let w = engine.weatherRule(for: s) {
+                                    Text("Weather: " + WeatherCondition.allCases.compactMap { c in w.map[c].map { "\(c.label) → \($0.title)" } }.joined(separator: " · ")
+                                         + (engine.weatherNow().map { " · now \($0.label)" } ?? " · no reading"))
+                                        .font(.caption2).foregroundStyle(.secondary)
+                                }
                                 if let (r, scope) = engine.rule(for: s) {
                                     Text("Day/Night\(scope == EngineState.allKey ? " (all displays)" : ""): ☀︎ \(r.day.title) · ☾ \(r.night.title) · switches \(shortTime(dayNight.nextChange))")
                                         .font(.caption2).foregroundStyle(.secondary)
@@ -87,5 +95,6 @@ struct DisplaysView: View {
             }.padding(24)
         }
         .sheet(item: $dnTarget) { DayNightSheet(target: $0) }
+        .sheet(item: $weatherTarget) { WeatherSheet(target: $0) }
     }
 }

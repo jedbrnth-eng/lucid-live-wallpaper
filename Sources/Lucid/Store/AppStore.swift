@@ -33,6 +33,7 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
     let engine: LucidEngine
     let dayNight: DayNightController
     let audio: AudioReactive
+    let weather: WeatherService
     let downloader = Downloader()
     @Published var library: [WallItem] = []
     @Published var aerials: [WallItem] = []
@@ -58,6 +59,7 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
         engine = e
         dayNight = DayNightController(engine: e)   // sets the phase before the first refresh
         audio = AudioReactive(engine: e)
+        weather = WeatherService(engine: e)
         if let d = try? Data(contentsOf: Paths.library) { library = SavedData.items(d) }
         aerials = Providers.aerials()
         live = LiveCatalog.load()

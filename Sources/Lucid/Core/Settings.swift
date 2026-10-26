@@ -46,6 +46,9 @@ enum Pref {
     static var audioReactive: Bool { get { d.bool(forKey: "audioReactive") } set { d.set(newValue, forKey: "audioReactive") } }
     static var audioSensitivity: Double { get { d.object(forKey: "audioSensitivity") as? Double ?? 1.0 } set { d.set(newValue, forKey: "audioSensitivity") } }
 
+    // Weather wallpapers (off by default; see WeatherService)
+    static var weatherEnabled: Bool { get { d.bool(forKey: "weatherEnabled") } set { d.set(newValue, forKey: "weatherEnabled") } }
+
     // Day/Night
     static var dayNightManual: Bool { get { d.bool(forKey: "dayNightManual") } set { d.set(newValue, forKey: "dayNightManual") } }
     static var dayNightUseLocation: Bool { get { d.bool(forKey: "dayNightUseLocation") } set { d.set(newValue, forKey: "dayNightUseLocation") } }

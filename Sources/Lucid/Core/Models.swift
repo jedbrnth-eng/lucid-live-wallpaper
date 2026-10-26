@@ -194,6 +194,7 @@ struct EngineState: Codable {
     var perScreen: [String: Assignment] = [:]
     var userPaused = false
     var dayNight: [String: DayNightRule]?   // key: display key, or "*" for all displays. Optional so old state.json still decodes.
+    var weather: [String: WeatherRule]?     // same keys; optional weather overrides (1.3.0+)
     static let allKey = "*"
 }
 
@@ -266,5 +267,6 @@ extension EngineState {
         perScreen = ((try? c.decodeIfPresent(LossyDictionary<Assignment>.self, forKey: .perScreen)) ?? nil)?.values ?? [:]
         userPaused = ((try? c.decodeIfPresent(Bool.self, forKey: .userPaused)) ?? nil) ?? false
         dayNight = ((try? c.decodeIfPresent(LossyDictionary<DayNightRule>.self, forKey: .dayNight)) ?? nil)?.values
+        weather = ((try? c.decodeIfPresent(LossyDictionary<WeatherRule>.self, forKey: .weather)) ?? nil)?.values
     }
 }

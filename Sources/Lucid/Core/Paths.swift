@@ -30,6 +30,7 @@ enum Paths {
     static let favorites = support.appendingPathComponent("favorites.json")
     static let playlists = support.appendingPathComponent("playlists.json")
     static let playback = support.appendingPathComponent("playback.json")
+    static let weather = support.appendingPathComponent("weather.json")
     static let aerialsRoot = URL(fileURLWithPath: "/Library/Application Support/com.apple.idleassetsd/Customer")
 
     static func make(_ u: URL) -> URL {

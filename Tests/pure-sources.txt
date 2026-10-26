@@ -7,3 +7,4 @@ Sources/Lucid/Engine/PausePolicy.swift
 Sources/Lucid/Media/ImportPolicy.swift
 Sources/Lucid/Store/PlaylistScheduler.swift
 Sources/Lucid/Hotkeys/Hotkey.swift
+Sources/Lucid/Weather/Weather.swift
