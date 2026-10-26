@@ -58,6 +58,13 @@ func registerPlaylistTests() {
         for _ in 1..<70 { r.advance(ids: ids, shuffle: true, now: Date(timeIntervalSince1970: 0), rng: &rng); seen.append(r.current!) }
         for round in 0..<10 { expectEqual(Set(seen[round * 7..<(round + 1) * 7]).count, 7, "round \(round) covers all") }
         for i in 1..<seen.count { expect(seen[i] != seen[i - 1], "no back-to-back repeat at \(i)") }
+        // Two items: a reshuffle starts with the on-screen item half the time, so this exercises the swap.
+        var two = PlaylistRun(playlistID: "p", ids: ["a", "b"], shuffle: true, now: Date(timeIntervalSince1970: 0), rng: &rng)
+        var prev = two.current
+        for i in 0..<40 {
+            two.advance(ids: ["a", "b"], shuffle: true, now: Date(timeIntervalSince1970: 0), rng: &rng)
+            expect(two.current != prev, "two-item playlist alternates (step \(i))"); prev = two.current
+        }
     }
     test("Playlist: editing a playing playlist keeps the current item and adds new ones") {
         var rng = SplitMix64(s: 7)
