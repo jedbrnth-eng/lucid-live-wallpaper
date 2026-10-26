@@ -66,6 +66,8 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
         audio = AudioReactive(engine: e)
         weather = WeatherService(engine: e)
         if let d = try? Data(contentsOf: Paths.library) { library = SavedData.items(d) }
+        // Unfinished downloads from a quit or crash mid-download (hidden .partial-* files and .loop.mp4 halves).
+        Downloader.cleanLeftovers(keep: Set(library.compactMap { $0.localPath.map { URL(fileURLWithPath: $0).lastPathComponent } }))
         aerials = Providers.aerials()
         (live, featuredIDs) = LiveCatalog.loadAll()
         if let d = try? Data(contentsOf: Paths.usage) { usage = UsageLog.decode(d) }

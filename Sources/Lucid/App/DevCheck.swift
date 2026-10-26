@@ -97,6 +97,7 @@ import AVFoundation
         renderViews(store, &r)
         await weatherChecks(store, &r)
         await reviewChecks(store, &r)
+        await downloadChecks(store, &r)
         // 6. Global shortcuts (dev bundle's own defaults): enable, check all three registered, a second claim of the
         //    same combination is refused by macOS, then turn them off again.
         let hk = HotkeyCenter.shared
@@ -323,6 +324,40 @@ import AVFoundation
 
     /// 10. Home and live previews: rows/hero from the real catalog, the local usage counter (written to usage.json,
     ///     read back leniently), the player limit, and (with LUCID_CHECK_VIDEO) making a small preview copy.
+    /// 11. Downloads (1.3.0 "stuck at 99%" fix): leftover cleanup touches only regular `.partial-*` / `*.loop.mp4`
+    /// files that the library doesn't use, and a local WebM download shows its real steps, converts and is checked.
+    private static func downloadChecks(_ store: Store, _ r: inout [String: Any]) async {
+        let fm = FileManager.default
+        let dir = Paths.make(Paths.support.appendingPathComponent("dl-check", isDirectory: true))
+        let outside = Paths.support.appendingPathComponent("outside.mp4")
+        try? Data("x".utf8).write(to: outside)
+        for n in [".partial-7-ABC", ".partial-8-DEF.webm", "clip.loop.mp4", "kept.loop.mp4", "clip.mp4", "photo.jpg"] {
+            try? Data("x".utf8).write(to: dir.appendingPathComponent(n))
+        }
+        try? fm.createDirectory(at: dir.appendingPathComponent(".partial-dir"), withIntermediateDirectories: true)
+        try? fm.createSymbolicLink(at: dir.appendingPathComponent(".partial-link"), withDestinationURL: outside)
+        let gone = Downloader.cleanLeftovers(keep: ["kept.loop.mp4"], in: dir)
+        r["dl_leftovers_removed"] = gone.sorted().joined(separator: ",")
+        r["dl_leftovers_remaining"] = ((try? fm.contentsOfDirectory(atPath: dir.path)) ?? []).sorted().joined(separator: ",")
+        r["dl_leftovers_link_target_kept"] = fm.fileExists(atPath: outside.path)
+        // A real WebM through the real Downloader (file:// URL), as a Live clip so it is also looped.
+        guard let w = ProcessInfo.processInfo.environment["LUCID_CHECK_WEBM"], Transcoder.ffmpeg != nil else { return }
+        var it = WallItem(id: "check:dl-webm", source: .live, kind: .video, title: "Check Download", width: 3840, height: 2160)
+        it.downloadURL = URL(fileURLWithPath: w).absoluteString
+        var seen: [String] = []
+        Downloader.phaseHook = { _, p in seen.append(p.label) }
+        let dl = store.downloader
+        store.download(it)
+        for _ in 0..<600 where dl.progress[it.id] != nil { await wait(0.25) }
+        Downloader.phaseHook = nil
+        r["dl_webm_phases"] = seen.joined(separator: " | ")
+        r["dl_webm_error"] = dl.errors[it.id] ?? NSNull()
+        let got = store.libraryItem(it.id)
+        r["dl_webm_in_library_as"] = got?.localPath.map { URL(fileURLWithPath: $0).lastPathComponent } ?? NSNull()
+        r["dl_webm_partials_left"] = ((try? fm.contentsOfDirectory(atPath: Paths.media.path)) ?? []).filter { $0.hasPrefix(".partial-") || $0.hasSuffix(".loop.mp4") }.count
+        if let got { store.remove(got) }
+    }
+
     private static func homeChecks(_ store: Store, _ r: inout [String: Any]) async {
         let input = store.homeInput()
         r["home_rows"] = HomeBuilder.rows(input).map { "\($0.title) (\($0.items.count))" }

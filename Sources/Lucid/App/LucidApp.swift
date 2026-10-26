@@ -67,6 +67,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
                 return
             }
+            // Development: download one URL through the real Downloader, print each step, then what is left in Media/.
+            // `-testDownloadCancelAt Converting` cancels 2 s into the step whose text starts with that word;
+            // `-testConversionTimeout 3` shortens the per-step limit to test the timeout.
+            if let s = DevMode.arg("testDownloadURL"), let u = URL(string: s) {
+                setvbuf(stdout, nil, _IOLBF, 0)
+                var it = WallItem(id: "test:dl-" + Paths.safe(u.lastPathComponent), source: Source(rawValue: DevMode.arg("testDownloadSource") ?? "") ?? .wikimedia,
+                                  kind: ImportPolicy.kind(forExtension: u.pathExtension.lowercased()) ?? .video, title: "Download test", width: 3840, height: 2160)
+                it.downloadURL = s
+                let t0 = Date(), cancelAt = DevMode.arg("testDownloadCancelAt")
+                let dl = store.downloader
+                if let t = DevMode.arg("testConversionTimeout").flatMap(Double.init) { dl.conversionTimeout = t }
+                Downloader.phaseHook = { id, p in
+                    print(String(format: "PHASE %6.1f s  %@", Date().timeIntervalSince(t0), p.label))
+                    if let c = cancelAt, p.label.hasPrefix(c) {
+                        Task { @MainActor in try? await Task.sleep(nanoseconds: 2_000_000_000); print("CANCEL"); dl.cancel(id) }
+                    }
+                }
+                store.download(it)
+                Task { @MainActor in
+                    while dl.progress[it.id] != nil { try? await Task.sleep(nanoseconds: 250_000_000) }
+                    try? await Task.sleep(nanoseconds: 1_500_000_000)   // let a cancelled step delete its files
+                    print(String(format: "END %6.1f s", Date().timeIntervalSince(t0)))
+                    print("ERROR \(dl.errors[it.id] ?? "none") retry=\(dl.canRetry(it.id))")
+                    print("LIBRARY \(store.libraryItem(it.id).map { "\($0.localPath ?? "-") \($0.width)x\($0.height) \($0.codec ?? "-")" } ?? "none")")
+                    let left = (try? FileManager.default.contentsOfDirectory(atPath: Paths.media.path)) ?? []
+                    print("MEDIA \(left.sorted().joined(separator: ", "))")
+                    exit(0)
+                }
+                return
+            }
             if let t = DevMode.arg("testLive"), let it = store.live.first(where: { $0.id.contains(t) }) ?? store.live.first {
                 store.setWallpaper(it)
             }

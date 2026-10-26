@@ -59,14 +59,7 @@ struct DetailView: View {
                 Text("License: \(it.license ?? "—")").font(.callout).foregroundStyle(.secondary).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
                 if let u = it.termsURL.flatMap(URL.init(string:)) ?? it.source.licenseURL { Link("terms ↗", destination: u).font(.callout) }
             }
-            if let p = dl.progress[item.id] {
-                HStack {
-                    ProgressView(value: p).tint(accent)
-                    Text("\(Int(p * 100))%").font(.caption.monospacedDigit())
-                    Button("Cancel") { dl.cancel(item.id) }.buttonStyle(.borderless)
-                }
-            }
-            if let e = dl.errors[item.id] { Label(e, systemImage: "exclamationmark.triangle").foregroundStyle(.orange) }
+            DownloadStatusRow(id: item.id)
             if let lib, lib.isLocalReady { WallpaperOptionsRow(item: lib) }
             HStack(spacing: 10) {
                 Button { store.setWallpaper(it) } label: { Label("Set as Wallpaper", systemImage: "sparkles.tv") }

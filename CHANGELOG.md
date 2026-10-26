@@ -17,7 +17,7 @@ All notable changes to Lucid. The format follows [Keep a Changelog](https://keep
 - **Weather wallpapers** (off by default): a different wallpaper when it rains, snows, is clear or cloudy, using Open-Meteo with an approximate location.
 - **Update check** (off by default): once a day, shows a link when a newer release is on GitHub. Nothing is installed automatically.
 - Draft Homebrew cask in `packaging/` (not published) and `docs/lock-screen-feasibility.md` (why Lucid can't animate the Lock Screen, and what a screen saver would take).
-- Unit tests grew from 33 to 126, including saved files written by the real 1.1.1 and 1.2.0 code and recorded Open-Meteo and GitHub responses. The headless development check now covers pausing, import, playlists, shortcuts, weather, the Home rows, the preview player limit and preview copies, and renders every screen including Home.
+- Unit tests grew from 33 to 137, including saved files written by the real 1.1.1 and 1.2.0 code and recorded Open-Meteo and GitHub responses. The headless development check now covers pausing, import, playlists, shortcuts, weather, the Home rows, the preview player limit and preview copies, a WebM download through every step and the leftover cleanup, and renders every screen including Home.
 
 ### Changed
 - The app now matches the website: deep indigo backdrop, the site's cyan/pink/violet accents, pill buttons, 14 pt rounded cards with a soft glow on hover, and tighter headings.
@@ -27,6 +27,9 @@ All notable changes to Lucid. The format follows [Keep a Changelog](https://keep
 - Library items, Day/Night pairs and playlists gained optional fields; files saved by 1.1.1 and 1.2.0 load unchanged.
 
 ### Fixed
+- **Downloads no longer look stuck at 99%.** After the file arrives, a WebM/OGV/MKV clip is converted for the Mac and a Live 4K clip is made into a seamless loop; for a 4K clip that takes from about half a minute to several minutes, and the bar sat frozen at 99% the whole time. The progress row now says what is happening ("Downloading 63%", "Converting for Mac…", "Making a seamless loop…", "Checking the file…") with a spinner for the steps whose length can't be known. Cancel works at every step (it stops ffmpeg or the loop export and deletes the half-made files), and a step that runs longer than 15 minutes is stopped with a clear message instead of waiting forever. A clip that can't be looped is still kept as it is, as before.
+- **A cut-off download is never added to your library.** Lucid checks the size against the one the server announced, then opens the file before adding it: a photo must decode and end properly, a video must play to its last second, and a converted WebM must be as long as the original says it is (ffmpeg would otherwise turn a cut-off WebM into a shorter clip without complaint). If a check fails you see why, with **Retry**, and nothing is left behind in `Media/`.
+- Half-finished files are kept under hidden `.partial-` names until every check passes, so the scan that picks up files dropped into Lucid's folder can no longer grab one mid-conversion. Leftovers from a quit or crash during a download (`.partial-*` and `*.loop.mp4` in `Media/`, never a file your library uses) are removed at launch.
 - A playlist playing on all displays no longer wipes a wallpaper or Day/Night pair you set on one display when it changes to the next item (starting the playlist still replaces them, as before).
 - A video's desktop picture that finishes rendering after you already switched wallpapers no longer replaces the newer one.
 - Importing the same file twice at once (for example dropping it twice) adds it once.

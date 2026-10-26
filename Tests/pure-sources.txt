@@ -10,3 +10,4 @@ Sources/Lucid/Hotkeys/Hotkey.swift
 Sources/Lucid/Weather/Weather.swift
 Sources/Lucid/Update/UpdateCheck.swift
 Sources/Lucid/Store/HomeModel.swift
+Sources/Lucid/Engine/DownloadPolicy.swift

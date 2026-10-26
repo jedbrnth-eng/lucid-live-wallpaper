@@ -23,6 +23,14 @@ enum Media {
         defer { try? h.close() }
         return [UInt8]((try? h.read(upToCount: 16)) ?? Data())
     }
+    static func tailBytes(_ u: URL, _ n: Int) -> [UInt8] {
+        guard let h = try? FileHandle(forReadingFrom: u) else { return [] }
+        defer { try? h.close() }
+        guard let end = try? h.seekToEnd() else { return [] }
+        try? h.seek(toOffset: end > UInt64(n) ? end - UInt64(n) : 0)
+        return [UInt8]((try? h.readToEnd()) ?? Data())
+    }
+    static func fileSize(_ u: URL) -> Int64 { (try? FileManager.default.attributesOfItem(atPath: u.path)[.size] as? Int64) ?? 0 }
     static func kind(of url: URL) -> Kind? {
         let ext = url.pathExtension.lowercased()
         if let k = ImportPolicy.kind(forExtension: ext) { return k }
@@ -49,6 +57,34 @@ enum Media {
               let w = p[kCGImagePropertyPixelWidth] as? Int, let h = p[kCGImagePropertyPixelHeight] as? Int else { return nil }
         let o = p[kCGImagePropertyOrientation] as? Int ?? 1
         return o >= 5 ? (h, w) : (w, h)
+    }
+    /// nil when the file really decodes: a photo must be complete (ImageIO) and render a thumbnail; a video must be
+    /// playable with a video track, a duration, and a frame near its end (a cut-off file fails that last read).
+    static func verify(_ url: URL, _ kind: Kind) async -> String? {
+        if kind == .image {
+            guard let src = CGImageSourceCreateWithURL(url as CFURL, nil), CGImageSourceGetCount(src) > 0 else {
+                return "The downloaded file isn't a readable image." }
+            guard CGImageSourceGetStatus(src) == .statusComplete, CGImageSourceGetStatusAtIndex(src, 0) == .statusComplete else {
+                return "The downloaded image is incomplete; the download was probably cut off." }
+            if let m = DownloadPolicy.imageEndProblem(head: header(url), tail: tailBytes(url, 4096), size: fileSize(url)) { return m }
+            guard CGImageSourceCreateThumbnailAtIndex(src, 0, [kCGImageSourceCreateThumbnailFromImageAlways: true,
+                                                               kCGImageSourceThumbnailMaxPixelSize: 256] as CFDictionary) != nil else {
+                return "The downloaded image can't be decoded." }
+            return nil
+        }
+        let asset = AVURLAsset(url: url)
+        guard (try? await asset.load(.isPlayable)) == true,
+              (try? await asset.loadTracks(withMediaType: .video))?.isEmpty == false,
+              let d = try? await asset.load(.duration), d.seconds.isFinite, d.seconds > 0 else {
+            return "The downloaded video can't be opened; it may be damaged or cut off." }
+        let gen = AVAssetImageGenerator(asset: asset)
+        gen.maximumSize = CGSize(width: 320, height: 320)
+        gen.requestedTimeToleranceBefore = CMTime(seconds: 2, preferredTimescale: 600)
+        gen.requestedTimeToleranceAfter = .zero
+        let end = CMTime(seconds: max(0, d.seconds - 0.5), preferredTimescale: 600)
+        guard (try? await gen.image(at: end)) != nil else {
+            return "The downloaded video is incomplete; the download was probably cut off." }
+        return nil
     }
     static func writeJPEG(_ cg: CGImage, to url: URL, quality: Double = 0.85) -> Bool {
         guard let d = CGImageDestinationCreateWithURL(url as CFURL, UTType.jpeg.identifier as CFString, 1, nil) else { return false }

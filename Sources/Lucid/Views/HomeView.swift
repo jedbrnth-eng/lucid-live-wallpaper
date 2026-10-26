@@ -105,10 +105,7 @@ struct HeroBanner: View {
                     }
                     .buttonStyle(.pill)
                     .accessibilityLabel(store.isFavorite(it.id) ? "Remove from favorites" : "Add to favorites")
-                    if let p = dl.progress[it.id] {
-                        ProgressView(value: p).tint(accent).frame(width: 120)
-                        Text("\(Int(p * 100))%").font(.caption.monospacedDigit()).foregroundStyle(Theme.muted)
-                    }
+                    DownloadStatusRow(id: it.id, compact: true)
                 }
                 .padding(.top, 4)
             }

@@ -25,22 +25,60 @@ enum Transcoder {
         .first { FileManager.default.isExecutableFile(atPath: $0) }
 
     /// WebM/VP9/AV1 -> HEVC MP4 (hardware encoder, no audio) so AVFoundation can play it.
+    /// Cancelling the calling task stops ffmpeg (SIGTERM) and throws CancellationError.
     static func toHEVC(_ src: URL, _ dst: URL) async throws {
         guard let ff = ffmpeg else { throw NSError(domain: "tx", code: 1, userInfo: [NSLocalizedDescriptionKey: "Needs ffmpeg (brew install ffmpeg) to convert WebM"]) }
         try? FileManager.default.removeItem(at: dst)
-        let code: Int32 = try await withCheckedThrowingContinuation { c in
-            let p = Process()
-            p.executableURL = URL(fileURLWithPath: ff)
-            p.arguments = ["-v", "error", "-y", "-i", src.path, "-map", "0:v:0", "-an",
-                           "-vf", "scale='min(3840,iw)':-2:flags=lanczos,format=yuv420p",
-                           "-c:v", "hevc_videotoolbox", "-q:v", "65", "-tag:v", "hvc1", "-movflags", "+faststart", dst.path]
-            p.standardOutput = FileHandle.nullDevice
-            p.standardError = FileHandle.nullDevice
-            p.terminationHandler = { c.resume(returning: $0.terminationStatus) }
-            do { try p.run() } catch { c.resume(throwing: error) }
-        }
+        let code = try await run(ff, ["-v", "error", "-y", "-i", src.path, "-map", "0:v:0", "-an",
+                                      "-vf", "scale='min(3840,iw)':-2:flags=lanczos,format=yuv420p",
+                                      "-c:v", "hevc_videotoolbox", "-q:v", "65", "-tag:v", "hvc1", "-movflags", "+faststart", dst.path]).status
+        if Task.isCancelled { try? FileManager.default.removeItem(at: dst); throw CancellationError() }
         guard code == 0, FileManager.default.fileExists(atPath: dst.path) else {
             throw NSError(domain: "tx", code: Int(code), userInfo: [NSLocalizedDescriptionKey: "ffmpeg conversion failed (\(code))"]) }
+    }
+
+    /// The length the source file's container declares (ffprobe), or nil. A cut-off WebM still declares its full
+    /// length while ffmpeg converts only what arrived, so comparing the two catches a truncated download.
+    static func declaredDuration(_ src: URL) async -> Double? {
+        guard let ff = ffmpeg else { return nil }
+        let probe = URL(fileURLWithPath: ff).deletingLastPathComponent().appendingPathComponent("ffprobe").path
+        guard FileManager.default.isExecutableFile(atPath: probe),
+              let r = try? await run(probe, ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", src.path]),
+              r.status == 0 else { return nil }
+        return Double(r.output.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
+    /// Runs a tool to completion; cancelling the task terminates it.
+    private static func run(_ tool: String, _ args: [String]) async throws -> (status: Int32, output: String) {
+        let box = ProcessBox()
+        let p = box.process
+        p.executableURL = URL(fileURLWithPath: tool)
+        p.arguments = args
+        let pipe = Pipe()
+        p.standardOutput = pipe
+        p.standardError = FileHandle.nullDevice
+        let status: Int32 = try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { (c: CheckedContinuation<Int32, Error>) in
+                p.terminationHandler = { c.resume(returning: $0.terminationStatus) }
+                box.lock.lock(); defer { box.lock.unlock() }
+                if box.cancelled { p.terminationHandler = nil; c.resume(throwing: CancellationError()); return }
+                do { try p.run() } catch { p.terminationHandler = nil; c.resume(throwing: error) }
+            }
+        } onCancel: { box.cancel() }
+        let out = String(data: (try? pipe.fileHandleForReading.readToEnd()) ?? Data(), encoding: .utf8) ?? ""
+        return (status, out)
+    }
+}
+
+/// A child process that a cancelled task can stop from any thread.
+final class ProcessBox: @unchecked Sendable {
+    let process = Process()
+    let lock = NSLock()
+    private(set) var cancelled = false
+    func cancel() {
+        lock.lock(); defer { lock.unlock() }
+        cancelled = true
+        if process.isRunning { process.terminate() }
     }
 }
 
@@ -91,7 +129,11 @@ enum LoopMaker {
         ex.outputURL = dst
         ex.outputFileType = .mp4
         let box = ExportBox(ex)
-        await withCheckedContinuation { (c: CheckedContinuation<Void, Never>) in box.session.exportAsynchronously { c.resume() } }
+        // Cancelling the calling task (Cancel button or the 15-minute limit) stops the export.
+        await withTaskCancellationHandler {
+            await withCheckedContinuation { (c: CheckedContinuation<Void, Never>) in box.session.exportAsynchronously { c.resume() } }
+        } onCancel: { box.session.cancelExport() }
+        if Task.isCancelled { try? FileManager.default.removeItem(at: dst); throw CancellationError() }
         if ex.status != .completed {
             throw ex.error ?? NSError(domain: "loop", code: 5, userInfo: [NSLocalizedDescriptionKey: "Export failed"])
         }

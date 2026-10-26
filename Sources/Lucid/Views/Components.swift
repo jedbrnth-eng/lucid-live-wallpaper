@@ -89,7 +89,12 @@ struct Card: View {
                 }
                 .overlay(alignment: .bottom) {
                     if let p = dl.progress[item.id] {
-                        ProgressView(value: p).tint(accent).padding(8).background(.black.opacity(0.4))
+                        HStack(spacing: 6) {
+                            if let f = p.fraction { ProgressView(value: f).tint(accent) } else { ProgressView().controlSize(.small) }
+                            Text(p.label).font(.caption2.monospacedDigit()).foregroundStyle(.white).lineLimit(1)
+                        }
+                        .padding(8).frame(maxWidth: .infinity).background(.black.opacity(0.5))
+                        .accessibilityElement(children: .combine)
                     } else if lit {
                         HStack(spacing: 6) {
                             Button { store.toggleFavorite(item) } label: {
@@ -218,6 +223,32 @@ struct Chips: View {
                         .overlay(Capsule().stroke(o == selected ? Theme.violet.opacity(0.9) : Theme.line))
                         .accessibilityAddTraits(o == selected ? .isSelected : [])
                 }
+            }
+        }
+    }
+}
+
+/// Download progress with the real step ("Downloading 63%", "Converting for Mac…", "Making a seamless loop…"),
+/// a bar while bytes arrive and a spinner for steps whose length can't be known, Cancel at every step,
+/// and the error with Retry when it failed.
+struct DownloadStatusRow: View {
+    @EnvironmentObject var dl: Downloader
+    let id: String
+    var compact = false
+    var body: some View {
+        if let p = dl.progress[id] {
+            HStack(spacing: 8) {
+                if let f = p.fraction { ProgressView(value: f).tint(accent).frame(maxWidth: compact ? 120 : .infinity) }
+                else { ProgressView().controlSize(.small) }
+                Text(p.label).font(.caption.monospacedDigit()).foregroundStyle(compact ? Theme.muted : .secondary).lineLimit(1)
+                Button("Cancel") { dl.cancel(id) }.buttonStyle(.borderless).font(.caption)
+            }
+            .accessibilityElement(children: .contain)
+        } else if let e = dl.errors[id] {
+            HStack(spacing: 8) {
+                Label(e, systemImage: "exclamationmark.triangle").foregroundStyle(.orange).font(compact ? .caption : .callout)
+                    .lineLimit(compact ? 2 : nil).fixedSize(horizontal: false, vertical: true)
+                if dl.canRetry(id) { Button("Retry") { dl.retry(id) }.buttonStyle(.borderless).font(.caption) }
             }
         }
     }
