@@ -7,13 +7,16 @@
 	<key>CFBundleIdentifier</key><string>com.jedbrn.lucid</string>
 	<key>CFBundleExecutable</key><string>Lucid</string>
 	<key>CFBundlePackageType</key><string>APPL</string>
-	<key>CFBundleShortVersionString</key><string>1.1.1</string>
-	<key>CFBundleVersion</key><string>3</string>
+	<key>CFBundleShortVersionString</key><string>1.3.0</string>
+	<key>CFBundleVersion</key><string>5</string>
 	<key>CFBundleIconFile</key><string>AppIcon</string>
 	<key>LSMinimumSystemVersion</key><string>14.0</string>
 	<key>LSApplicationCategoryType</key><string>public.app-category.utilities</string>
 	<key>NSHighResolutionCapable</key><true/>
 	<key>NSPrincipalClass</key><string>NSApplication</string>
+	<key>NSAudioCaptureUsageDescription</key><string>Lucid listens to the sound your Mac is playing (never the microphone) so audio-reactive wallpapers can move with your music. The sound is analysed on this Mac and is never recorded or sent anywhere. You can turn this off in Lucid's Settings.</string>
+	<key>NSLocationUsageDescription</key><string>Lucid uses your approximate location to work out today's sunrise and sunset for Day/Night wallpapers. It stays on this Mac, except that if you also turn on Weather wallpapers, a rounded version (about 10 km) is sent to Open-Meteo to look up the weather.</string>
+	<key>NSLocationWhenInUseUsageDescription</key><string>Lucid uses your approximate location to work out today's sunrise and sunset for Day/Night wallpapers. It stays on this Mac, except that if you also turn on Weather wallpapers, a rounded version (about 10 km) is sent to Open-Meteo to look up the weather.</string>
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>

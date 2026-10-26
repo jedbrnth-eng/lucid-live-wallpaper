@@ -23,7 +23,7 @@ struct RemoteImage: View {
     @State private var failed = false
     var body: some View {
         ZStack {
-            Rectangle().fill(LinearGradient(colors: [Color.white.opacity(0.05), Color.white.opacity(0.02)], startPoint: .top, endPoint: .bottom))
+            Rectangle().fill(LinearGradient(colors: [Theme.violet.opacity(0.10), Theme.bg2.opacity(0.6)], startPoint: .top, endPoint: .bottom))
             if let img { Image(nsImage: img).resizable().aspectRatio(contentMode: .fill) }
             else if failed { Image(systemName: "photo").foregroundStyle(.tertiary) }
             else { ProgressView().controlSize(.small) }
@@ -55,34 +55,47 @@ struct Badge: View {
 
 struct Card: View {
     let item: WallItem
+    /// Opens the detail sheet (click, Return/Space when focused, VoiceOver default action).
+    var onOpen: (() -> Void)? = nil
     @EnvironmentObject var store: Store
     @EnvironmentObject var dl: Downloader
-    @EnvironmentObject var engine: WallpaperEngine
+    @EnvironmentObject var engine: LucidEngine
     @State private var hover = false
+    @FocusState private var focused: Bool
     var body: some View {
-        let current = engine.state.all?.itemID == item.id || engine.state.perScreen.values.contains { $0.itemID == item.id }
-        VStack(alignment: .leading, spacing: 6) {
+        let current = engine.currentAssignments.contains { $0.itemID == item.id }
+        let local = store.libraryItem(item.id) ?? item
+        let onMac = store.inLibrary(item.id) || (item.localPath.map { FileManager.default.fileExists(atPath: $0) } ?? false)
+        let lit = hover || focused
+        VStack(alignment: .leading, spacing: 8) {
             Color.clear.aspectRatio(16 / 9, contentMode: .fit)
-                .overlay(RemoteImage(url: item.thumbURL, localPath: item.thumbPath))
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-                .overlay(RoundedRectangle(cornerRadius: 10).stroke(current ? accent : (hover ? accent.opacity(0.5) : Color.white.opacity(0.08)), lineWidth: current ? 2 : 1))
+                .overlay(RemoteImage(url: item.thumbURL, localPath: local.thumbPath ?? item.thumbPath))
+                .overlay(PreviewLayer(item: local, wanted: lit))
+                .clipShape(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous)
+                    .stroke(current ? accent : (lit ? Theme.muted.opacity(0.7) : Theme.line), lineWidth: current || focused ? 2 : 1))
                 .overlay(alignment: .topLeading) {
                     HStack(spacing: 4) {
                         Badge(text: item.resLabel, color: item.is4K ? accent : .orange)
                         if item.kind == .video { Badge(text: "LIVE", color: accent2) }
-                    }.padding(7)
+                    }.padding(8)
                 }
                 .overlay(alignment: .topTrailing) {
-                    if current { Image(systemName: "checkmark.seal.fill").foregroundStyle(accent).padding(7) }
-                    else if store.isFavorite(item.id) && !hover { Image(systemName: "heart.fill").foregroundStyle(accent2).padding(7) }
-                    else if store.inLibrary(item.id) || (item.source == .aerials && item.localPath != nil) {
-                        Image(systemName: "arrow.down.circle.fill").foregroundStyle(.white.opacity(0.85)).padding(7).help("On this Mac")
+                    if current { Image(systemName: "checkmark.seal.fill").foregroundStyle(accent).padding(8) }
+                    else if store.isFavorite(item.id) && !lit { Image(systemName: "heart.fill").foregroundStyle(accent2).padding(8) }
+                    else if onMac {
+                        Image(systemName: "arrow.down.circle.fill").foregroundStyle(.white.opacity(0.85)).padding(8).help("On this Mac")
                     }
                 }
                 .overlay(alignment: .bottom) {
                     if let p = dl.progress[item.id] {
-                        ProgressView(value: p).tint(accent).padding(8).background(.black.opacity(0.4))
-                    } else if hover {
+                        HStack(spacing: 6) {
+                            if let f = p.fraction { ProgressView(value: f).tint(accent) } else { ProgressView().controlSize(.small) }
+                            Text(p.label).font(.caption2.monospacedDigit()).foregroundStyle(.white).lineLimit(1)
+                        }
+                        .padding(8).frame(maxWidth: .infinity).background(.black.opacity(0.5))
+                        .accessibilityElement(children: .combine)
+                    } else if lit {
                         HStack(spacing: 6) {
                             Button { store.toggleFavorite(item) } label: {
                                 Image(systemName: store.isFavorite(item.id) ? "heart.fill" : "heart")
@@ -90,20 +103,50 @@ struct Card: View {
                             }.help("Favorite")
                             Spacer()
                             Button { store.setWallpaper(item) } label: {
-                                Label(current ? "On Desktop" : "Apply", systemImage: current ? "checkmark" : "sparkles.tv").font(.caption.weight(.bold))
-                            }.help("Set as wallpaper on all displays")
+                                Label(current ? "On Desktop" : onMac ? "Apply" : "Download & Apply", systemImage: current ? "checkmark" : "sparkles.tv")
+                                    .font(.caption.weight(.bold))
+                                    .padding(.horizontal, 10).padding(.vertical, 4)
+                                    .background(Capsule().fill(Theme.ink)).foregroundStyle(Theme.bg)
+                            }.help(onMac ? "Set as wallpaper on all displays" : "Download in full quality (can be hundreds of MB), then set on all displays")
                         }
-                        .buttonStyle(.plain).padding(.horizontal, 10).padding(.vertical, 7)
+                        .buttonStyle(.plain).padding(.horizontal, 10).padding(.vertical, 8)
                         .background(LinearGradient(colors: [.clear, .black.opacity(0.75)], startPoint: .top, endPoint: .bottom))
+                        .transition(.opacity)
                     }
                 }
-                .scaleEffect(hover ? 1.015 : 1).animation(.easeOut(duration: 0.15), value: hover)
-            Text(item.title).font(.callout.weight(.medium)).lineLimit(1)
+                .shadow(color: lit ? Theme.violet.opacity(0.35) : .clear, radius: 16, y: 6)
+                .scaleEffect(lit ? 1.02 : 1)
+                .animation(.easeOut(duration: 0.18), value: lit)
+            Text(item.title).font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.ink).lineLimit(1)
             Text([item.author, item.category].compactMap { $0 }.joined(separator: " · ").ifEmpty(item.source.label))
-                .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                .font(.caption).foregroundStyle(Theme.muted).lineLimit(1)
         }
         .contentShape(Rectangle())
         .onHover { hover = $0 }
+        .focusable(onOpen != nil)
+        .focused($focused)
+        .focusEffectDisabled()
+        .onKeyPress(.return) { open() }
+        .onKeyPress(.space) { open() }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityText(current: current, onMac: onMac))
+        .accessibilityHint("Opens details")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { _ = open() }
+        .accessibilityAction(named: current ? "On desktop" : onMac ? "Apply" : "Download and apply") { store.setWallpaper(item) }
+        .accessibilityAction(named: store.isFavorite(item.id) ? "Remove from favorites" : "Add to favorites") { store.toggleFavorite(item) }
+    }
+    private func open() -> KeyPress.Result {
+        guard let onOpen else { return .ignored }
+        onOpen(); return .handled
+    }
+    private func accessibilityText(current: Bool, onMac: Bool) -> String {
+        var parts = [item.title]
+        if let c = item.category ?? item.author { parts.append(c) }
+        parts.append("\(item.resLabel) \(item.kind == .video ? "live video" : "photo")")
+        if current { parts.append("on your desktop now") } else if onMac { parts.append("on this Mac") }
+        if store.isFavorite(item.id) { parts.append("favorite") }
+        return parts.joined(separator: ", ")
     }
 }
 
@@ -146,7 +189,7 @@ struct Grid: View {
     var body: some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 250, maximum: 420), spacing: 18)], spacing: 20) {
             ForEach(items) { item in
-                Card(item: item)
+                Card(item: item, onOpen: { selected = item })
                     .onTapGesture { selected = item }
                     .contextMenu { ItemMenu(item: item, playlistID: playlistID) }
             }
@@ -157,10 +200,12 @@ struct Grid: View {
 struct Header: View {
     let title: String; let subtitle: String
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title).font(.system(size: 26, weight: .bold))
-            Text(subtitle).font(.callout).foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title).font(.system(size: 30, weight: .bold)).tracking(-0.6).foregroundStyle(Theme.ink)
+            Text(subtitle).font(.callout).foregroundStyle(Theme.muted)
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isHeader)
     }
 }
 
@@ -172,10 +217,38 @@ struct Chips: View {
                 ForEach(options, id: \.self) { o in
                     Button(o) { onPick(o) }
                         .buttonStyle(.plain).font(.callout.weight(.medium))
+                        .foregroundStyle(o == selected ? Theme.ink : Theme.muted)
                         .padding(.horizontal, 12).padding(.vertical, 6)
-                        .background(Capsule().fill(o == selected ? accent.opacity(0.22) : Color.white.opacity(0.06)))
-                        .overlay(Capsule().stroke(o == selected ? accent : Color.clear))
+                        .background(Capsule().fill(o == selected ? Theme.violet.opacity(0.28) : Theme.surface))
+                        .overlay(Capsule().stroke(o == selected ? Theme.violet.opacity(0.9) : Theme.line))
+                        .accessibilityAddTraits(o == selected ? .isSelected : [])
                 }
+            }
+        }
+    }
+}
+
+/// Download progress with the real step ("Downloading 63%", "Converting for Mac…", "Making a seamless loop…"),
+/// a bar while bytes arrive and a spinner for steps whose length can't be known, Cancel at every step,
+/// and the error with Retry when it failed.
+struct DownloadStatusRow: View {
+    @EnvironmentObject var dl: Downloader
+    let id: String
+    var compact = false
+    var body: some View {
+        if let p = dl.progress[id] {
+            HStack(spacing: 8) {
+                if let f = p.fraction { ProgressView(value: f).tint(accent).frame(maxWidth: compact ? 120 : .infinity) }
+                else { ProgressView().controlSize(.small) }
+                Text(p.label).font(.caption.monospacedDigit()).foregroundStyle(compact ? Theme.muted : .secondary).lineLimit(1)
+                Button("Cancel") { dl.cancel(id) }.buttonStyle(.borderless).font(.caption)
+            }
+            .accessibilityElement(children: .contain)
+        } else if let e = dl.errors[id] {
+            HStack(spacing: 8) {
+                Label(e, systemImage: "exclamationmark.triangle").foregroundStyle(.orange).font(compact ? .caption : .callout)
+                    .lineLimit(compact ? 2 : nil).fixedSize(horizontal: false, vertical: true)
+                if dl.canRetry(id) { Button("Retry") { dl.retry(id) }.buttonStyle(.borderless).font(.caption) }
             }
         }
     }

@@ -2120,7 +2120,8 @@
    "width": 3840,
    "height": 2160,
    "fps": 25.0,
-   "duration": 60.0
+   "duration": 60.0,
+   "featured": true
   },
   {
    "id": "esawebb:weic2214b",
@@ -3040,7 +3041,8 @@
    "width": 3840,
    "height": 2160,
    "fps": 25.0,
-   "duration": 13.0
+   "duration": 13.0,
+   "featured": true
   },
   {
    "id": "esahubble:heic1712b",
@@ -3720,7 +3722,8 @@
    "width": 3840,
    "height": 2160,
    "fps": 25.0,
-   "duration": 40.0
+   "duration": 40.0,
+   "featured": true
   },
   {
    "id": "esahubble:potw2539a",
@@ -4560,7 +4563,8 @@
    "width": 3840,
    "height": 2160,
    "fps": 25.0,
-   "duration": 50.0
+   "duration": 50.0,
+   "featured": true
   },
   {
    "id": "esahubble:heic1805b",
@@ -5180,7 +5184,8 @@
    "width": 3840,
    "height": 2160,
    "fps": 25.0,
-   "duration": 19.9
+   "duration": 19.9,
+   "featured": true
   },
   {
    "id": "eso:almatimelapse12j",
@@ -7307,7 +7312,8 @@
    "fps": 0,
    "duration": 11.1,
    "bytes": 4860406,
-   "fileExt": "webm"
+   "fileExt": "webm",
+   "featured": true
   },
   {
    "id": "commons:55036094",
@@ -7351,7 +7357,8 @@
    "fps": 0,
    "duration": 11.0,
    "bytes": 52495873,
-   "fileExt": "webm"
+   "fileExt": "webm",
+   "featured": true
   },
   {
    "id": "commons:47053233",
@@ -7395,7 +7402,8 @@
    "fps": 0,
    "duration": 9.2,
    "bytes": 13675561,
-   "fileExt": "webm"
+   "fileExt": "webm",
+   "featured": true
   },
   {
    "id": "commons:152437940",
@@ -7483,7 +7491,8 @@
    "fps": 0,
    "duration": 132.8,
    "bytes": 219126368,
-   "fileExt": "webm"
+   "fileExt": "webm",
+   "featured": true
   },
   {
    "id": "commons:135273632",
@@ -8407,7 +8416,8 @@
    "fps": 0,
    "duration": 112.2,
    "bytes": 235219182,
-   "fileExt": "webm"
+   "fileExt": "webm",
+   "featured": true
   },
   {
    "id": "commons:141534617",

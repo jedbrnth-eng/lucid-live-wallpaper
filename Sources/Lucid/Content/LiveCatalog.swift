@@ -38,7 +38,10 @@ enum LiveCatalog {
     static let bundled = Bundle.main.url(forResource: "catalog", withExtension: "json")
     static let userCopy = Paths.support.appendingPathComponent("catalog.json")
 
-    static func load() -> [WallItem] {
+    static func load() -> [WallItem] { loadAll().items }
+
+    /// The catalog clips plus the hand-picked ones (`"featured": true`, curated order) for the Home page.
+    static func loadAll() -> (items: [WallItem], featured: [String]) {
         // Prefer the newer of the user copy and the bundled copy.
         var best: (Date, Data)?
         for u in [userCopy, bundled].compactMap({ $0 }) {
@@ -48,8 +51,8 @@ enum LiveCatalog {
             if best == nil || g > best!.0 { best = (g, d) }
         }
         guard let data = best?.1, let j = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let rows = j["items"] as? [[String: Any]] else { return [] }
-        return rows.compactMap { r in
+              let rows = j["items"] as? [[String: Any]] else { return ([], []) }
+        let items: [WallItem] = rows.compactMap { r in
             if (r["needsTranscode"] as? Bool ?? false) && Transcoder.ffmpeg == nil { return nil }
             guard let id = r["id"] as? String, let url = r["url"] as? String,
                   let w = r["width"] as? Int, let h = r["height"] as? Int else { return nil }
@@ -64,13 +67,11 @@ enum LiveCatalog {
             it.creditFull = r["creditFull"] as? String ?? r["credit"] as? String
             return it
         }
+        let have = Set(items.map(\.id))
+        let featured = rows.compactMap { r -> String? in
+            guard (r["featured"] as? Bool) == true, let id = r["id"] as? String else { return nil }
+            return "live:\(id)"
+        }.filter(have.contains)
+        return (items, featured)
     }
-}
-
-struct Playlist: Codable, Identifiable, Hashable {
-    var id: String = UUID().uuidString
-    var name: String
-    var items: [WallItem] = []
-    var shuffle = true
-    var minutes = 60
 }

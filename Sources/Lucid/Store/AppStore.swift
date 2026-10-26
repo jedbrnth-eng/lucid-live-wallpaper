@@ -30,7 +30,10 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
 
 @MainActor final class Store: ObservableObject {
     static let shared = Store()
-    let engine = WallpaperEngine()
+    let engine: LucidEngine
+    let dayNight: DayNightController
+    let audio: AudioReactive
+    let weather: WeatherService
     let downloader = Downloader()
     @Published var library: [WallItem] = []
     @Published var aerials: [WallItem] = []
@@ -39,25 +42,46 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
     @Published var keysPresent: Set<KeyName> = []
     @Published var toast: String?
     @Published var favorites: [WallItem] = []
+    /// Hand-picked catalog clips for Home (catalog.json `featured`), in curated order.
+    @Published var featuredIDs: [String] = []
+    /// How often each wallpaper was chosen (Home "Most used"). Local only: usage.json, never sent anywhere.
+    @Published private(set) var usage = UsageLog()
     @Published var playlists: [Playlist] = []
-    @Published var activePlaylistID: String? = Pref.activePlaylist
+    /// Playing playlists, one per scope (display key, or "*" for all displays). Saved in playback.json.
+    @Published private(set) var runs: [String: PlaylistRun] = [:]
     var downloadsTimer: Timer?
     var folderTimer: Timer?
     var adoptInFlight: Set<String> = []
+    private var importsInFlight: Set<String> = []
     var watchSince: Date?
     var seenDownloads: Set<String> = []
     var pendingSizes: [String: Int] = [:]
-    private var playlistCursor = -1
     private var history: [String] = []
     private var rotateTimer: Timer?
 
     init() {
-        if let d = try? Data(contentsOf: Paths.library), let l = try? JSONDecoder().decode([WallItem].self, from: d) { library = l }
+        let e = LucidEngine()
+        engine = e
+        dayNight = DayNightController(engine: e)   // sets the phase before the first refresh
+        audio = AudioReactive(engine: e)
+        weather = WeatherService(engine: e)
+        if let d = try? Data(contentsOf: Paths.library) { library = SavedData.items(d) }
+        // Unfinished downloads from a quit or crash mid-download (hidden .partial-* files and .loop.mp4 halves).
+        Downloader.cleanLeftovers(keep: Set(library.compactMap { $0.localPath.map { URL(fileURLWithPath: $0).lastPathComponent } }))
         aerials = Providers.aerials()
-        live = LiveCatalog.load()
-        if let d = try? Data(contentsOf: Paths.favorites), let f = try? JSONDecoder().decode([WallItem].self, from: d) { favorites = f }
-        if let d = try? Data(contentsOf: Paths.playlists), let p = try? JSONDecoder().decode([Playlist].self, from: d) { playlists = p }
-        if let a = activePlaylistID, !playlists.contains(where: { $0.id == a }) { activePlaylistID = nil; Pref.activePlaylist = nil }
+        (live, featuredIDs) = LiveCatalog.loadAll()
+        if let d = try? Data(contentsOf: Paths.usage) { usage = UsageLog.decode(d) }
+        if let d = try? Data(contentsOf: Paths.favorites) { favorites = SavedData.items(d) }
+        if let d = try? Data(contentsOf: Paths.playlists) { playlists = SavedData.playlists(d) }
+        if let d = try? Data(contentsOf: Paths.playback) { runs = PlaybackState.decode(d).runs }
+        // 1.2.0 and earlier kept one playlist for all displays in a preference.
+        if runs.isEmpty, let a = Pref.activePlaylist, let p = playlists.first(where: { $0.id == a }), !p.items.isEmpty {
+            var r = PlaylistRun(playlistID: a, ids: p.items.map(\.id), shuffle: p.shuffle, now: Date())
+            if let cur = engine.state.all?.itemID, let i = r.order.firstIndex(of: cur) { r.position = i }
+            runs[EngineState.allKey] = r
+        }
+        runs = runs.filter { kv in playlists.contains { $0.id == kv.value.playlistID } }
+        syncPlaylistScopes()
         if let cur = engine.state.all?.itemID { history = [cur] }
         refreshKeys()
         for s in Source.discoverable { discover[s] = DiscoverState() }
@@ -107,11 +131,14 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
         guard let it = libraryItem(item.id) else { return }
         if let p = it.localPath {
             engine.forget(path: p)
-            if p.hasPrefix(Paths.media.path) { try? FileManager.default.removeItem(atPath: p) }
+            // Only Lucid's own copies are deleted; a file imported "in place", a link, or anything outside Media/ never is.
+            if it.referenced != true, ImportPolicy.isSafeToDelete(p, inside: Paths.media) { try? FileManager.default.removeItem(atPath: p) }
         }
-        if let t = it.thumbPath { try? FileManager.default.removeItem(atPath: t) }
+        if let t = it.thumbPath, ImportPolicy.isSafeToDelete(t, inside: Paths.thumbs) { try? FileManager.default.removeItem(atPath: t) }
         library.removeAll { $0.id == item.id }
         saveLibrary()
+        usage.forget(item.id); saveUsage()
+        PreviewRenditions.forget(id: item.id)
         flash("Removed “\(it.title)”")
     }
 
@@ -123,12 +150,35 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
         if let d = try? JSONEncoder().encode(favorites) { try? d.write(to: Paths.favorites, options: .atomic) }
     }
     var currentItem: WallItem? {
-        guard let id = engine.state.all?.itemID ?? engine.state.perScreen.values.first?.itemID else { return nil }
+        guard let id = engine.currentAssignments.first?.itemID else { return nil }
         return findItem(id)
     }
     func findItem(_ id: String) -> WallItem? {
         libraryItem(id) ?? favorites.first { $0.id == id } ?? playlists.lazy.flatMap(\.items).first { $0.id == id }
             ?? live.first { $0.id == id } ?? aerials.first { $0.id == id }
+    }
+
+    /// An assignment that can go on screen right now (used by Day/Night): the item must already be on this Mac.
+    func readyAssignment(for item: WallItem) -> Assignment? {
+        guard let lib = libraryItem(item.id) ?? (item.isLocalReady ? item : nil), lib.isLocalReady, let p = lib.localPath else { return nil }
+        return Assignment(itemID: lib.id, title: lib.title, path: p, kind: lib.kind, options: lib.options)
+    }
+
+    /// Per-wallpaper fit / crop focus / speed. Saved with the library item and applied live wherever it is on screen.
+    func setOptions(_ item: WallItem, _ o: WallpaperOptions) {
+        guard let i = library.firstIndex(where: { $0.id == item.id }) else { return }
+        library[i].options = o.isDefault ? nil : o
+        saveLibrary()
+        engine.updateOptions(itemID: item.id, library[i].options)
+    }
+
+    func setDayNight(day: WallItem, night: WallItem, dawn: WallItem? = nil, dusk: WallItem? = nil, screenKey: String?) {
+        guard let d = readyAssignment(for: day), let n = readyAssignment(for: night) else {
+            flash("Both Day and Night wallpapers must be on this Mac first"); return
+        }
+        engine.applyDayNight(DayNightRule(day: d, night: n, dawn: dawn.flatMap(readyAssignment(for:)), dusk: dusk.flatMap(readyAssignment(for:))),
+                             screenKey: screenKey)
+        flash("Day/Night set: \(d.title) by day, \(n.title) at night")
     }
 
     // Playlists
@@ -151,28 +201,94 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
     func updatePlaylist(_ p: Playlist) {
         guard let i = playlists.firstIndex(where: { $0.id == p.id }) else { return }
         playlists[i] = p; savePlaylists()
-        if activePlaylistID == p.id { scheduleRotation() }
+        var rng = SystemRandomNumberGenerator()
+        for (scope, var r) in runs where r.playlistID == p.id {
+            let before = r.current
+            r.reconcile(ids: p.items.map(\.id), shuffle: p.shuffle, rng: &rng)
+            runs[scope] = r
+            if r.current == nil { runs[scope] = nil } else if r.current != before { show(scope) }
+        }
+        saveRuns()
     }
     func deletePlaylist(_ pid: String) {
-        if activePlaylistID == pid { stopPlaylist() }
+        stopPlaylist(pid)
         playlists.removeAll { $0.id == pid }; savePlaylists()
     }
+    /// The playlist playing on all displays (the one the menu bar and toolbar talk about).
+    var activePlaylistID: String? { runs[EngineState.allKey]?.playlistID ?? runs.values.first?.playlistID }
     var activePlaylist: Playlist? { playlists.first { $0.id == activePlaylistID } }
-    func playPlaylist(_ pid: String) {
-        guard let p = playlists.first(where: { $0.id == pid }), !p.items.isEmpty else { flash("Add some wallpapers to this playlist first"); return }
-        activePlaylistID = pid; Pref.activePlaylist = pid; playlistCursor = -1
-        next(); scheduleRotation()
-        flash("Playing “\(p.name)” · \(p.shuffle ? "shuffle" : "in order") · every \(Self.intervalLabel(p.minutes))")
+    func isPlaying(_ pid: String) -> Bool { runs.values.contains { $0.playlistID == pid } }
+    /// Where a playlist is playing, for display: "All displays" or display names.
+    func playingWhere(_ pid: String) -> String {
+        let scopes = runs.filter { $0.value.playlistID == pid }.map(\.key)
+        if scopes.contains(EngineState.allKey) { return "all displays" }
+        return scopes.map { k in NSScreen.screens.first { $0.stableKey == k }?.localizedName ?? "a disconnected display" }.sorted().joined(separator: ", ")
     }
-    func stopPlaylist() { activePlaylistID = nil; Pref.activePlaylist = nil; scheduleRotation() }
+
+    /// Start a playlist on every display (screenKey nil) or on one display.
+    func playPlaylist(_ pid: String, screenKey: String? = nil) {
+        guard let p = playlists.first(where: { $0.id == pid }), !p.items.isEmpty else { flash("Add some wallpapers to this playlist first"); return }
+        let scope = screenKey ?? EngineState.allKey
+        if screenKey == nil { runs = [:] }   // "all displays" replaces every per-display playlist, like setting one wallpaper for all
+        runs[scope] = PlaylistRun(playlistID: pid, ids: p.items.map(\.id), shuffle: p.shuffle, now: Date())
+        saveRuns(); syncPlaylistScopes()
+        show(scope, starting: true)
+        let when = PlaylistScheduler.sanitize(p.times).isEmpty ? "every \(Self.intervalLabel(p.minutes))" : "at set times"
+        flash("Playing “\(p.name)” · \(p.shuffle ? "shuffle" : "in order") · \(when)")
+    }
+    /// Stop one playlist everywhere, or (nil) every playlist.
+    func stopPlaylist(_ pid: String? = nil) {
+        runs = runs.filter { pid != nil && $0.value.playlistID != pid }
+        saveRuns(); syncPlaylistScopes()
+    }
+    private func saveRuns() {
+        if let d = try? JSONEncoder().encode(PlaybackState(runs: runs)) { try? d.write(to: Paths.playback, options: .atomic) }
+        Pref.activePlaylist = runs[EngineState.allKey]?.playlistID
+    }
+    private func syncPlaylistScopes() { engine.crossfadeScopes = Set(runs.keys); scheduleRotation() }
+
+    /// Put a run's current item on its scope. Starting an all-displays playlist replaces every display's wallpaper;
+    /// its later changes keep anything set on one display since (a wallpaper or a Day/Night rule).
+    private func show(_ scope: String, starting: Bool = false) {
+        guard let r = runs[scope], let id = r.current, let p = playlists.first(where: { $0.id == r.playlistID }),
+              let it = p.items.first(where: { $0.id == id }) else { return }
+        var keep = Set(runs.keys)
+        if scope == EngineState.allKey && !starting { keep.formUnion(engine.state.perScreen.keys); keep.formUnion((engine.state.dayNight ?? [:]).keys) }
+        keep.remove(EngineState.allKey)
+        setWallpaper(libraryItem(it.id) ?? it, screenKey: scope == EngineState.allKey ? nil : scope, keepScreens: keep, chosen: false)
+    }
+    private func step(_ scope: String, forward: Bool) {
+        guard var r = runs[scope], let p = playlists.first(where: { $0.id == r.playlistID }) else { return }
+        var rng = SystemRandomNumberGenerator()
+        if forward { r.advance(ids: p.items.map(\.id), shuffle: p.shuffle, now: Date(), rng: &rng) } else { r.back(); r.changedAt = Date() }
+        runs[scope] = r; saveRuns()
+        show(scope)
+    }
+    /// Every 30 s: advance any playlist whose next change is due (also catches up after sleep or a relaunch).
+    func playlistTick(now: Date = Date()) {
+        for (scope, r) in runs {
+            guard let p = playlists.first(where: { $0.id == r.playlistID }) else { continue }
+            if PlaylistScheduler.isDue(r, minutes: p.minutes, times: p.times, timeZone: .current, now: now) { step(scope, forward: true) }
+        }
+    }
     static func intervalLabel(_ m: Int) -> String {
         m < 60 ? "\(m) min" : m < 1440 ? "\(m / 60) h" : "day"
     }
 
 
-    private func didApply(_ id: String) {
+    /// `chosen` = the user picked this wallpaper (counts for Home "Most used"); playlist steps and shuffles don't.
+    private func didApply(_ id: String, chosen: Bool = true) {
         if let i = library.firstIndex(where: { $0.id == id }) { library[i].lastAppliedAt = Date(); saveLibrary() }
+        if chosen { usage.record(id); saveUsage() }
         if history.last != id { history.append(id); if history.count > 60 { history.removeFirst() } }
+    }
+
+    private func saveUsage() { if let d = usage.encoded() { try? d.write(to: Paths.usage, options: .atomic) } }
+
+    /// Everything the Home page needs, as plain data (see HomeBuilder).
+    func homeInput(now: Date = Date()) -> HomeInput {
+        HomeInput(library: library, live: live, aerials: aerials, favorites: favorites, usage: usage, featuredIDs: featuredIDs,
+                  themes: LiveCatalog.themes, now: now, isReady: \.isLocalReady, theme: LiveCatalog.theme)
     }
 
     func flash(_ s: String) {
@@ -213,10 +329,10 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
     }
 
     // Applying
-    func setWallpaper(_ item: WallItem, screenKey: String? = nil) {
+    func setWallpaper(_ item: WallItem, screenKey: String? = nil, keepScreens: Set<String> = [], chosen: Bool = true) {
         if let lib = libraryItem(item.id), lib.isLocalReady, let p = lib.localPath {
-            engine.apply(Assignment(itemID: lib.id, title: lib.title, path: p, kind: lib.kind), screenKey: screenKey)
-            didApply(lib.id)
+            engine.apply(Assignment(itemID: lib.id, title: lib.title, path: p, kind: lib.kind, options: lib.options), screenKey: screenKey, keepScreens: keepScreens)
+            didApply(lib.id, chosen: chosen)
             flash("Wallpaper set: \(lib.title)")
             return
         }
@@ -226,8 +342,8 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
                 it.thumbPath = await Media.thumbnail(p, .video, id: it.id)
                 it.addedAt = Date()
                 addToLibrary(it)
-                engine.apply(Assignment(itemID: it.id, title: it.title, path: p, kind: .video), screenKey: screenKey)
-                didApply(it.id)
+                engine.apply(Assignment(itemID: it.id, title: it.title, path: p, kind: .video), screenKey: screenKey, keepScreens: keepScreens)
+                didApply(it.id, chosen: chosen)
                 flash("Wallpaper set: \(it.title)")
             }
             return
@@ -237,8 +353,8 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
             guard let self else { return }
             self.addToLibrary(done)
             if let p = done.localPath {
-                self.engine.apply(Assignment(itemID: done.id, title: done.title, path: p, kind: done.kind), screenKey: screenKey)
-                self.didApply(done.id)
+                self.engine.apply(Assignment(itemID: done.id, title: done.title, path: p, kind: done.kind), screenKey: screenKey, keepScreens: keepScreens)
+                self.didApply(done.id, chosen: chosen)
                 self.flash("Wallpaper set: \(done.title)")
             }
         }
@@ -257,6 +373,7 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
     }
 
     enum ImportResult { case added(Bool), duplicate, unsupported, failed(String) }
+    static let maxImportFiles = 500
 
     /// Drag & drop, Dock and Downloads-folder imports all land here. Files are COPIED
     /// into the app's Media folder so deleting ~/Downloads never breaks a wallpaper. Formats AVFoundation
@@ -266,52 +383,98 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
         guard !local.isEmpty else { return }
         Task {
             var files: [URL] = []
-            for u in local {
+            for u in local.prefix(Self.maxImportFiles) {
                 var isDir: ObjCBool = false
                 if FileManager.default.fileExists(atPath: u.path, isDirectory: &isDir), isDir.boolValue {
-                    let e = FileManager.default.enumerator(at: u, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])
-                    while let f = e?.nextObject() as? URL { if Media.kind(of: f) != nil { files.append(f) } }
+                    // Only files really inside the chosen folder: symlinks and hidden files are skipped.
+                    files += ImportPolicy.mediaFiles(in: u, limit: Self.maxImportFiles - files.count)
                 } else { files.append(u) }
+                if files.count >= Self.maxImportFiles { break }
             }
             if files.count > 1 || !quiet { flash(files.count > 1 ? "Importing \(files.count) files…" : "Importing \(files.first?.lastPathComponent ?? "")…") }
             var added = 0, low = 0, dup = 0, unsup = 0
             var failed: [String] = []
+            var rejected: [String] = []
             for u in files {
                 switch await importOne(u, move: move, site: site, page: page) {
                 case .added(let is4K): added += 1; if !is4K { low += 1 }
                 case .duplicate: dup += 1
-                case .unsupported: unsup += 1
+                case .unsupported: unsup += 1; rejected.append(u.lastPathComponent)
                 case .failed(let m): failed.append("\(u.lastPathComponent): \(m)")
                 }
             }
             var msg = added == 1 ? "Added to your library" : "Imported \(added) wallpapers"
             if added == 0 { msg = dup > 0 ? "Already in your library" : "Nothing imported" }
             if low > 0 { msg += " · \(low) below 4K (flagged)" }
-            if unsup > 0 { msg += " · \(unsup) not a video/photo" }
+            if unsup > 0 { msg += unsup == 1 && files.count == 1 ? " · “\(rejected[0])” isn't a video or photo Lucid can use" : " · \(unsup) not a video/photo" }
             if !failed.isEmpty { msg += " · failed: " + failed.prefix(2).joined(separator: "; ") }
             flash(msg)
         }
     }
 
-    func importOne(_ u: URL, move: Bool, site: String?, page: String?) async -> ImportResult {
-        guard let k = Media.kind(of: u), Media.looksLikeMedia(u) else { return .unsupported }
+    func importOne(_ input: URL, move: Bool, site: String?, page: String?) async -> ImportResult {
         let fm = FileManager.default
+        // A symlink you choose counts as the file it points to. A moving import (files dropped into Lucid's own folders)
+        // never follows one: moving or deleting a link's target could take a file from anywhere on the Mac.
+        if move && ImportPolicy.isSymlink(input) { return .unsupported }
+        let u = input.resolvingSymlinksInPath()
+        guard (try? u.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true else { return .unsupported }
         let size = (try? fm.attributesOfItem(atPath: u.path)[.size] as? Int64) ?? 0
-        let base = u.deletingPathExtension().lastPathComponent
-        let id = "local:" + Paths.safe("\(base)-\(size)")
-        if inLibrary(id) && (libraryItem(id)?.isLocalReady ?? false) { if move { try? fm.removeItem(at: u) }; return .duplicate }
         let ext = u.pathExtension.lowercased()
+        let k: Kind
+        switch ImportPolicy.check(ext: ext, size: size, header: Media.header(u)) {
+        case .ok(let kind): k = kind
+        case .rejected(let why): return ImportPolicy.kind(forExtension: ext) == nil ? .unsupported : .failed(why)
+        }
+        let base = u.deletingPathExtension().lastPathComponent
+        var nameBase = base
+        var id = "local:" + Paths.safe("\(base)-\(size)")
+        /// nil = no ready library item with this id; true = it is this very file or has identical contents.
+        func sameAsLibrary(_ id: String) -> Bool? {
+            guard let have = libraryItem(id), have.isLocalReady, let hp = have.localPath else { return nil }
+            return URL(fileURLWithPath: hp).resolvingSymlinksInPath().path == u.path || fm.contentsEqual(atPath: hp, andPath: u.path)
+        }
+        if sameAsLibrary(id) == false {
+            // A different file that only shares the name and size (IMG_0001.JPG from two cameras): keep both.
+            guard let tag = ImportPolicy.contentTag(u) else { return .failed("couldn't read the file") }
+            nameBase = "\(tag)-\(base)"
+            id = "local:" + Paths.safe("\(tag)-\(base)-\(size)")
+        }
+        switch sameAsLibrary(id) {
+        case true?:
+            let isLibraryFile = libraryItem(id)?.localPath.map { URL(fileURLWithPath: $0).resolvingSymlinksInPath().path == u.path } ?? false
+            if move && !isLibraryFile { try? fm.removeItem(at: u) }   // an identical copy is already in the library
+            return .duplicate
+        case false?: return .failed("another file with the same name and size is already in your library")
+        case nil: break
+        }
+        // The same file dropped twice at once: the second waits for nothing and leaves the file alone.
+        guard !importsInFlight.contains(id) else { return .duplicate }
+        importsInFlight.insert(id)
+        defer { importsInFlight.remove(id) }
+        // Damaged files: make sure AVFoundation / ImageIO can actually read it before copying anything.
         var needsTx = false
         if k == .video {
-            let playable = (try? await AVURLAsset(url: u).load(.isPlayable)) ?? false
+            let asset = AVURLAsset(url: u)
+            let playable = (try? await asset.load(.isPlayable)) ?? false
             needsTx = !playable || ["webm", "mkv", "avi", "wmv", "flv", "ogv"].contains(ext)
-        }
-        var dest = Paths.media.appendingPathComponent(Paths.safe(base) + "-" + String(size, radix: 36) + "." + (needsTx ? "mp4" : ext))
+            if !needsTx, await Media.dims(u.path, .video).map({ $0.0 > 0 && $0.1 > 0 }) != true {
+                return .failed("damaged, or no video track")
+            }
+        } else if await Media.dims(u.path, .image) == nil { return .failed("damaged, or not a photo format macOS can read") }
+        let inMedia = ImportPolicy.isContained(u.path, in: Paths.media.resolvingSymlinksInPath().path)
+        let reference = Pref.importInPlace && !move && !needsTx && !inMedia
+        var dest = Paths.media.appendingPathComponent(ImportPolicy.destinationName(base: nameBase, size: size, ext: needsTx ? "mp4" : ext))
+        guard ImportPolicy.isContained(dest.path, in: Paths.media.path) else { return .failed("bad file name") }
         do {
-            if u.standardizedFileURL.path.hasPrefix(Paths.media.standardizedFileURL.path) { dest = u }
+            if inMedia || reference { dest = u }
             else if needsTx {
-                try await Transcoder.toHEVC(u, dest)
+                do { try await Transcoder.toHEVC(u, dest) } catch {
+                    try? fm.removeItem(at: dest)   // never leave a half-written file behind
+                    return .failed(Transcoder.ffmpeg == nil ? error.localizedDescription : "damaged, or a video format Lucid can't convert")
+                }
                 if move { try? fm.removeItem(at: u) }
+                if await Media.dims(dest.path, .video) == nil { try? fm.removeItem(at: dest); return .failed("could not convert this video") }
             } else {
                 try? fm.removeItem(at: dest)
                 if move { try fm.moveItem(at: u, to: dest) } else { try fm.copyItem(at: u, to: dest) }
@@ -324,6 +487,7 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
                           fileExt: dest.pathExtension, localPath: dest.path)
         it.author = site
         it.pageURL = page
+        it.referenced = reference ? true : nil
         it.thumbPath = await Media.thumbnail(dest.path, k, id: id)
         it.bytes = (try? fm.attributesOfItem(atPath: dest.path)[.size] as? Int64)
         it.duration = k == .video ? await Media.duration(dest.path) : nil
@@ -360,38 +524,36 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
 
     // Rotation / next
     func next() {
+        if !runs.isEmpty { for k in runs.keys.sorted() { step(k, forward: true) }; return }
         let cur = engine.state.all?.itemID
-        if let p = activePlaylist, !p.items.isEmpty {
-            let idx: Int
-            if p.shuffle {
-                let others = p.items.indices.filter { p.items[$0].id != cur }
-                idx = others.randomElement() ?? 0
-            } else { idx = (playlistCursor + 1) % p.items.count }
-            playlistCursor = idx
-            let it = p.items[idx]
-            setWallpaper(libraryItem(it.id) ?? it)
-            return
-        }
         let pool = library.filter { $0.isLocalReady && $0.id != cur }
         guard let pick = pool.randomElement() else { flash("Add more wallpapers to your library first"); return }
-        setWallpaper(pick)
+        setWallpaper(pick, chosen: false)
     }
     func previous() {
+        if !runs.isEmpty { for k in runs.keys.sorted() { step(k, forward: false) }; return }
         guard history.count >= 2 else { flash("No previous wallpaper yet"); return }
         history.removeLast()
         let id = history.removeLast()
         guard let it = findItem(id) else { flash("Previous wallpaper is no longer available"); return }
-        setWallpaper(it)
+        setWallpaper(it, chosen: false)
     }
+    /// Playlists are checked every 30 s; without one, the Settings auto-change timer picks a random library item.
     func scheduleRotation() {
         rotateTimer?.invalidate(); rotateTimer = nil
-        let m = activePlaylist?.minutes ?? Pref.rotateMinutes
+        if !runs.isEmpty {
+            rotateTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
+                MainActor.assumeIsolated { self?.playlistTick() } }
+            playlistTick()
+            return
+        }
+        let m = Pref.rotateMinutes
         guard m > 0 else { return }
         rotateTimer = Timer.scheduledTimer(withTimeInterval: Double(m) * 60, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.next() } }
     }
 
-    var libraryBytes: Int64 { library.filter { $0.localPath?.hasPrefix(Paths.media.path) ?? false }.compactMap(\.bytes).reduce(0, +) }
+    var libraryBytes: Int64 { library.filter { $0.referenced != true && ($0.localPath?.hasPrefix(Paths.media.path) ?? false) }.compactMap(\.bytes).reduce(0, +) }
 
     // Self-test (headless): `open -a "Lucid" --args -selftest YES`
     func runSelfTest() async -> [String: Any] {
@@ -433,6 +595,8 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
         }
         r["favorites"] = favorites.count
         r["playlists"] = playlists.count
+        r["day_night_phase"] = dayNight.phase.rawValue
+        r["audio_reactive"] = audio.status.text
         r["screens"] = NSScreen.screens.map { "\($0.localizedName) \($0.pixelSize)" }
         return r
     }

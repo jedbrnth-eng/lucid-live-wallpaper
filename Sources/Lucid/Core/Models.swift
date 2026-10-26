@@ -107,7 +107,8 @@ struct WallItem: Codable, Identifiable, Hashable {
     var creditFull: String?
     var lastAppliedAt: Date?
     var tags: [String]?
-
+    var options: WallpaperOptions?   // per-wallpaper fit / crop focus / speed (1.3.0+)
+    var referenced: Bool?            // true = imported "in place": Lucid points at your file and never deletes it
     var is4K: Bool { max(width, height) >= 3840 && min(width, height) >= 2160 }
     var resLabel: String {
         let m = max(width, height)
@@ -125,10 +126,147 @@ struct Assignment: Codable, Equatable {
     var title: String
     var path: String
     var kind: Kind
+    var reactive: ReactiveOptions?   // optional audio-reactive look for this wallpaper
+    var options: WallpaperOptions?   // optional per-wallpaper fit / crop focus / speed (1.3.0+)
+
+    /// Same media on screen (ignores look options, which are updated in place without reloading).
+    func sameMedia(_ o: Assignment) -> Bool { path == o.path && kind == o.kind }
+}
+
+enum FitMode: String, Codable, CaseIterable { case fill, fit, stretch }
+
+/// Per-wallpaper display options. Every field is optional: nil = use the app-wide setting.
+struct WallpaperOptions: Codable, Equatable, Hashable {
+    var fit: FitMode?
+    var focusX: Double?   // 0 = left edge, 1 = right edge (fill only)
+    var focusY: Double?   // 0 = top, 1 = bottom (fill only)
+    var speed: Double?
+
+    init(fit: FitMode? = nil, focusX: Double? = nil, focusY: Double? = nil, speed: Double? = nil) {
+        self.fit = fit; self.focusX = focusX; self.focusY = focusY; self.speed = speed
+    }
+    /// Lenient: an unknown or malformed field is dropped on its own; it never makes the wallpaper unreadable.
+    init(from decoder: Decoder) throws {
+        guard let c = try? decoder.container(keyedBy: CodingKeys.self) else { self.init(); return }
+        self.init(fit: (try? c.decodeIfPresent(FitMode.self, forKey: .fit)) ?? nil,
+                  focusX: (try? c.decodeIfPresent(Double.self, forKey: .focusX)) ?? nil,
+                  focusY: (try? c.decodeIfPresent(Double.self, forKey: .focusY)) ?? nil,
+                  speed: (try? c.decodeIfPresent(Double.self, forKey: .speed)) ?? nil)
+    }
+    var isDefault: Bool { fit == nil && focusX == nil && focusY == nil && speed == nil }
+    func effectiveSpeed(default d: Double) -> Double { min(4, max(0.25, speed ?? d)) }
+    func effectiveFit(defaultFill: Bool) -> FitMode { fit ?? (defaultFill ? .fill : .fit) }
+}
+
+/// A Day/Night assignment: one wallpaper between sunrise and sunset, another the rest of the time.
+struct DayNightRule: Codable, Equatable {
+    var day: Assignment
+    var night: Assignment
+    var dawn: Assignment?   // optional (1.3.0+): shown from civil dawn until the sun is 6° up
+    var dusk: Assignment?   // optional (1.3.0+): shown from 6° before sunset until civil dusk
+
+    init(day: Assignment, night: Assignment, dawn: Assignment? = nil, dusk: Assignment? = nil) {
+        self.day = day; self.night = night; self.dawn = dawn; self.dusk = dusk
+    }
+    /// Day and night are required; a dawn/dusk side that doesn't decode is dropped on its own.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        day = try c.decode(Assignment.self, forKey: .day)
+        night = try c.decode(Assignment.self, forKey: .night)
+        dawn = (try? c.decodeIfPresent(Assignment.self, forKey: .dawn)) ?? nil
+        dusk = (try? c.decodeIfPresent(Assignment.self, forKey: .dusk)) ?? nil
+    }
+    func pick(_ p: DayPhase) -> Assignment { p == .day ? day : night }
+    /// Dawn/dusk wallpapers win in their window; without one, the 1.2.0 day/night answer is used unchanged.
+    func pick(_ p: DayPhase, part: DayPart) -> Assignment {
+        switch part {
+        case .dawn: return dawn ?? pick(p)
+        case .dusk: return dusk ?? pick(p)
+        default: return pick(p)
+        }
+    }
+    var all: [Assignment] { [day, night] + [dawn, dusk].compactMap { $0 } }
+    func mapAll(_ f: (Assignment) -> Assignment) -> DayNightRule { DayNightRule(day: f(day), night: f(night), dawn: dawn.map(f), dusk: dusk.map(f)) }
 }
 
 struct EngineState: Codable {
     var all: Assignment?
     var perScreen: [String: Assignment] = [:]
     var userPaused = false
+    var dayNight: [String: DayNightRule]?   // key: display key, or "*" for all displays. Optional so old state.json still decodes.
+    var weather: [String: WeatherRule]?     // same keys; optional weather overrides (1.3.0+)
+    static let allKey = "*"
+}
+
+struct Playlist: Codable, Identifiable, Hashable {
+    var id: String = UUID().uuidString
+    var name: String
+    var items: [WallItem] = []
+    var shuffle = true
+    var minutes = 60
+    var times: [Int]?   // optional: change at these minutes after local midnight instead of every `minutes` (1.3.0+)
+}
+
+// MARK: - Loading saved data (library.json, favorites.json, playlists.json, state.json)
+
+// Saved files can hold entries this version no longer understands (a removed source or kind, e.g. from a
+// development build, or a newer Lucid). Each entry is decoded on its own, so only that entry is dropped.
+
+enum SavedData {
+    static func items(_ d: Data) -> [WallItem] { (try? JSONDecoder().decode(LossyArray<WallItem>.self, from: d))?.values ?? [] }
+    static func playlists(_ d: Data) -> [Playlist] { (try? JSONDecoder().decode(LossyArray<Playlist>.self, from: d))?.values ?? [] }
+    static func state(_ d: Data) -> EngineState? { try? JSONDecoder().decode(EngineState.self, from: d) }
+}
+
+struct LossyArray<T: Decodable>: Decodable {
+    var values: [T]
+    private struct Skip: Decodable { init(from decoder: Decoder) throws {} }
+    init(from decoder: Decoder) throws {
+        var c = try decoder.unkeyedContainer()
+        var out: [T] = []
+        while !c.isAtEnd {
+            if let v = try? c.decode(T.self) { out.append(v) } else { _ = try c.decode(Skip.self) }   // Skip moves past the bad entry
+        }
+        values = out
+    }
+}
+
+struct LossyDictionary<T: Decodable>: Decodable {
+    var values: [String: T]
+    private struct Key: CodingKey {
+        var stringValue: String
+        var intValue: Int? { nil }
+        init?(stringValue: String) { self.stringValue = stringValue }
+        init?(intValue: Int) { return nil }
+    }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: Key.self)
+        var out: [String: T] = [:]
+        for k in c.allKeys { if let v = try? c.decode(T.self, forKey: k) { out[k.stringValue] = v } }
+        values = out
+    }
+}
+
+extension Playlist {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        items = try c.decode(LossyArray<WallItem>.self, forKey: .items).values
+        shuffle = try c.decode(Bool.self, forKey: .shuffle)
+        minutes = try c.decode(Int.self, forKey: .minutes)
+        times = (try? c.decodeIfPresent([Int].self, forKey: .times)) ?? nil
+    }
+}
+
+extension EngineState {
+    /// Assignments or Day/Night rules that no longer decode (e.g. a removed wallpaper kind) are dropped; the rest is kept.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        all = (try? c.decodeIfPresent(Assignment.self, forKey: .all)) ?? nil
+        perScreen = ((try? c.decodeIfPresent(LossyDictionary<Assignment>.self, forKey: .perScreen)) ?? nil)?.values ?? [:]
+        userPaused = ((try? c.decodeIfPresent(Bool.self, forKey: .userPaused)) ?? nil) ?? false
+        dayNight = ((try? c.decodeIfPresent(LossyDictionary<DayNightRule>.self, forKey: .dayNight)) ?? nil)?.values
+        weather = ((try? c.decodeIfPresent(LossyDictionary<WeatherRule>.self, forKey: .weather)) ?? nil)?.values
+    }
 }

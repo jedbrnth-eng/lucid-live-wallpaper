@@ -1,0 +1,29 @@
+[
+  {
+    "id" : "P1",
+    "items" : [
+      {
+        "addedAt" : 800000000,
+        "height" : 2160,
+        "id" : "local:Neon-123",
+        "kind" : "video",
+        "lastAppliedAt" : 800000100,
+        "localPath" : "\/Users\/example\/Library\/Application Support\/Lucid\/Media\/Neon-3f.mp4",
+        "source" : "local",
+        "title" : "Neon",
+        "width" : 3840
+      },
+      {
+        "height" : 3000,
+        "id" : "nasa:abc",
+        "kind" : "image",
+        "source" : "nasa",
+        "title" : "Earth",
+        "width" : 4000
+      }
+    ],
+    "minutes" : 30,
+    "name" : "Mix",
+    "shuffle" : true
+  }
+]

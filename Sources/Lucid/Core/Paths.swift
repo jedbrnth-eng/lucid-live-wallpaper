@@ -17,8 +17,9 @@ import ImageIO
 
 enum Paths {
     static let fm = FileManager.default
-    static let support = make(fm.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        .appendingPathComponent("Lucid", isDirectory: true))
+    /// `LUCID_SUPPORT_DIR` lets a development build run against a throwaway folder instead of your real library.
+    static let support = make(ProcessInfo.processInfo.environment["LUCID_SUPPORT_DIR"].map { URL(fileURLWithPath: $0, isDirectory: true) }
+        ?? fm.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Lucid", isDirectory: true))
     static let media = make(support.appendingPathComponent("Media", isDirectory: true))
     static let incoming = make(support.appendingPathComponent("Incoming", isDirectory: true))
     static let thumbs = make(support.appendingPathComponent("Thumbs", isDirectory: true))
@@ -28,6 +29,9 @@ enum Paths {
     static let selftest = support.appendingPathComponent("selftest.json")
     static let favorites = support.appendingPathComponent("favorites.json")
     static let playlists = support.appendingPathComponent("playlists.json")
+    static let playback = support.appendingPathComponent("playback.json")
+    static let weather = support.appendingPathComponent("weather.json")
+    static let usage = support.appendingPathComponent("usage.json")   // local apply counts for Home "Most used" (1.3.0+)
     static let aerialsRoot = URL(fileURLWithPath: "/Library/Application Support/com.apple.idleassetsd/Customer")
 
     static func make(_ u: URL) -> URL {

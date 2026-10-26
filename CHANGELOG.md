@@ -4,6 +4,73 @@ All notable changes to Lucid. The format follows [Keep a Changelog](https://keep
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-10-26
+
+### Added
+- **Home page** (opens first): a big featured wallpaper that plays, then rows you scroll sideways, Netflix-style: Recently used, Most used, Featured, Favorites, New in your library, and one row per category (Space, Nature & Landscapes, Ocean & Beaches, Sky & Time-lapse, Cities, Apple Aerials, My Files), each with "See all". A fresh install shows Featured and the categories; rows with nothing in them stay hidden. Rows and cards work with the keyboard (Tab, Return/Space to open, arrow buttons to page) and VoiceOver (each card reads its title, type and whether it's on this Mac, with Apply and Favorite actions).
+- **Live previews.** Hover (or focus) a card and its clip plays, muted and looping, so you see it as it will look; the Home hero and the detail sheet play on their own. Only clips already on your Mac preview (nothing is downloaded for a preview). Lucid makes a small, short, silent copy once (640×360 for cards, 1280×720 for the hero and detail, the first 8–12 seconds) and caches it in `Previews/` (at most 160 files and 300 MB), plays at most 3 at a time, and stops them all when the window is hidden or in the background, Reduce Motion is on, or the wallpaper is smart-paused.
+- **Featured** clips are hand-picked in `catalog.json` (`"featured": true`, kept by `tools/build_catalog.py`), not ranked by popularity. **Most used** counts how often you chose each wallpaper; the count is saved only on your Mac (`usage.json`), never sent anywhere, and appears once something has been chosen twice. Playlist steps and shuffles don't count. Besides locking, display sleep, Low Power Mode and battery, Lucid now pauses below a battery level you pick (default 20%, on battery only), when your Mac is under serious heat, and optionally while the whole Mac's CPU use stays high for 30 seconds. Settings and the menu bar show a status line ("Playing", "Paused: full-screen app"). After a long pause (default 5 minutes) the video players are closed to free memory and reopen when playback resumes.
+- **Your own files, your way.** Choose to copy imported files into Lucid's library (default) or use them where they are. Per wallpaper: fill, fit or stretch, which part stays visible when cropping, and playback speed.
+- **Playlists on a schedule.** Play a playlist on all displays or on one display each, change on a timer or at times of day (`07:00, 18:30`), shuffle without repeats, cross-fades for photos too, and resume where it was after a restart.
+- **Global shortcuts** (off by default) for pause/resume, next and previous, using macOS hot keys (no Accessibility permission). Conflicts are shown.
+- **Dawn and dusk wallpapers** for Day & Night pairs: civil dawn until the sun is 6° up, and golden hour until last light.
+- **Weather wallpapers** (off by default): a different wallpaper when it rains, snows, is clear or cloudy, using Open-Meteo with an approximate location.
+- **Update check** (off by default): once a day, shows a link when a newer release is on GitHub. Nothing is installed automatically.
+- Draft Homebrew cask in `packaging/` (not published) and `docs/lock-screen-feasibility.md` (why Lucid can't animate the Lock Screen, and what a screen saver would take).
+- Unit tests grew from 33 to 145, including saved files written by the real 1.1.1 and 1.2.0 code and recorded Open-Meteo and GitHub responses. The headless development check now covers pausing, import, playlists, shortcuts, weather, the Home rows, the preview player limit and preview copies, a WebM download through every step and the leftover cleanup, Cancel racing a finished download, preview players that must not fight or go stale, and renders every screen including Home.
+
+### Changed
+- The app now matches the website: deep indigo backdrop, the site's cyan/pink/violet accents, pill buttons, 14 pt rounded cards with a soft glow on hover, and tighter headings.
+- The detail sheet previews only a clip that is on your Mac (a poster plus Download otherwise); it no longer streams the full 4K file from the source to preview it.
+- Settings are grouped with new Keyboard shortcuts and Weather sections and scroll in the Settings window.
+- Preferences given as launch arguments (for example `-pauseWhenCovered NO`) are now honoured.
+- Library items, Day/Night pairs and playlists gained optional fields; files saved by 1.1.1 and 1.2.0 load unchanged.
+
+### Fixed
+- **Downloads no longer look stuck at 99%.** After the file arrives, a WebM/OGV/MKV clip is converted for the Mac and a Live 4K clip is made into a seamless loop; for a 4K clip that takes from about half a minute to several minutes, and the bar sat frozen at 99% the whole time. The progress row now says what is happening ("Downloading 63%", "Converting for Mac…", "Making a seamless loop…", "Checking the file…") with a spinner for the steps whose length can't be known. Cancel works at every step (it stops ffmpeg or the loop export and deletes the half-made files), and a step that runs longer than 15 minutes is stopped with a clear message instead of waiting forever. A clip that can't be looped is still kept as it is, as before.
+- **A cut-off download is never added to your library.** Lucid checks the size against the one the server announced, then opens the file before adding it: a photo must decode and end properly, a video must play to its last second, and a converted WebM must be as long as the original says it is (ffmpeg would otherwise turn a cut-off WebM into a shorter clip without complaint). If a check fails you see why, with **Retry**, and nothing is left behind in `Media/`.
+- Half-finished files are kept under hidden `.partial-` names until every check passes, so the scan that picks up files dropped into Lucid's folder can no longer grab one mid-conversion. Leftovers from a quit or crash during a download (hidden `.partial-*` files and the `live_*.loop.mp4` halves older versions could leave in `Media/`, never a file your library uses) are removed at launch. A file of your own that merely ends in `.loop.mp4` is never touched.
+- Pressing Cancel while a seamless loop was still being prepared could crash Lucid (AVFoundation refuses to start an export that was already cancelled); the loop step now simply stops. Moving away from a card while its preview copy is being made stops that copy too.
+- Cancel pressed just as a download's last bytes arrived could let the download finish and join the library anyway; Cancel now always wins.
+- A download cancelled while it was being finished no longer leaves a stray thumbnail, and the finished file gets its real name only at the moment it joins the library.
+- A converter that ignores the polite stop (ffmpeg stuck in the hardware encoder) is force-stopped 2 seconds later, so Cancel and the 15-minute limit always end it; a tool's output can no longer fill its pipe and stall it.
+- Two previews wanting the last free player no longer take it from each other over and over (restarting both players every third of a second); the newer one keeps it.
+- The Home hero and the detail sheet start previewing as soon as a clip finishes downloading, and switch to the new clip when the hero changes, instead of staying on a poster or the old clip.
+- Library items without an "added" date can no longer crash the Home page.
+- A playlist playing on all displays no longer wipes a wallpaper or Day/Night pair you set on one display when it changes to the next item (starting the playlist still replaces them, as before).
+- A video's desktop picture that finishes rendering after you already switched wallpapers no longer replaces the newer one.
+- Importing the same file twice at once (for example dropping it twice) adds it once.
+- A different photo that only shares a name and size with one in your library (two cameras' `IMG_0001.JPG`) is added instead of being treated as a duplicate.
+- GIFs were recognised by their first byte as video; they are photos again. A file whose contents don't match its extension (a photo named `.mp4`) is refused.
+- Manual Day/Night times saved outside 00:00–23:59 (hand-edited preferences) are read as that time of day instead of giving wrong phases.
+- A damaged `playback.json` or zone.tab entry, or an impossible audio sample rate, can no longer crash Lucid.
+- Opening Settings inside the main window could crash in development builds of this release (a missing shared object); every window now gets the same set, and the development check renders each screen to catch it.
+
+### Security
+- Imports check the file's contents, size and readability before copying, give copies sanitised names inside Lucid's Media folder, skip links that point outside a chosen folder, and never delete files used in place. Lucid now only deletes files strictly inside its Media folder.
+- New network features use HTTPS only, fixed hosts, short timeouts, response size limits and strict parsing, and fail quietly.
+- Releases publish `Lucid.zip.sha256`; `install.sh` verifies it and only uses HTTPS, including redirects. Only a release older than 1.3.0 (checksum "not found") installs without it; any other failure to fetch the checksum stops the install.
+- Removing a wallpaper deletes only Lucid's own files: real files inside its Media and Thumbs folders, never a link or a path outside them, even if `library.json` says otherwise.
+- Files dropped into Lucid's folder are never followed through links: a link there can no longer make Lucid move or delete the file it points to.
+- The update check opens a release page only if it is exactly `https://github.com/jedbrnth-eng/lucid-live-wallpaper/releases/tag/…` (no `..`, user names, ports, queries or escapes).
+- A download's file extension comes from catalog or provider data, so Lucid now keeps only letters and digits from it: it can never turn the download's temporary or final name into a path outside `Media/`.
+- Trimming the preview cache deletes only its own regular `.mp4` copies, never a folder or link someone put there.
+- Turning off "Use my location" for Day/Night also forgets the saved approximate location.
+- Development test switches (`-lucidCheck`, `-applyAerial`, `-testLive`, …) are read from the command line only, never from saved preferences; the headless check refuses to run without a throwaway `LUCID_SUPPORT_DIR` and keeps its settings apart from yours.
+- The release workflow accepts only an `x.y.z` VERSION and passes it to the shell through the environment.
+- `docs/security-review.md` documents every input, every `Process` use and the permissions Lucid asks for.
+
+## [1.2.0] - 2026-10-26
+
+### Added
+- **Audio-reactive wallpapers** (off by default). Captures the sound your Mac plays with a Core Audio tap (macOS 14.2+, never the microphone), analyses it on device, and drives per-display looks: pulse on bass, glow with volume, spectrum bars. Capture stops whenever no reactive wallpaper is playing.
+- **Day & Night wallpapers.** Pick a day and a night wallpaper per display or for all displays. Switches at sunrise and sunset (NOAA equations, location from your time zone or, if you allow it, your Mac's location) or at fixed times, with a short cross-fade. Re-checks after sleep, time zone and clock changes.
+- Unit tests for the new logic (`./test.sh`, also run in CI) and a headless development check for Day/Night and audio-reactive looks (`-lucidCheck YES`, off by default).
+
+### Changed
+- Changing wallpaper now cross-fades the new window over the old one, then releases the old player and its window observer.
+- `LUCID_SUPPORT_DIR` lets a development build use a throwaway data folder.
+- Saved libraries, favorites, playlists and display settings now load entry by entry, so one entry Lucid doesn't recognise is skipped instead of discarding the whole file.
 - License changed from MIT to GPL-3.0 for all new work. Versions released before this change stay available under MIT.
 
 ## [1.1.1] - 2026-10-17
@@ -45,7 +112,9 @@ First public release.
 - Per-display wallpapers, playlists, favorites, auto-change timer and open at login.
 - Battery-friendly playback: pauses when covered, in Low Power Mode, on battery, when locked or the display sleeps.
 
-[Unreleased]: https://github.com/jedbrnth-eng/lucid-live-wallpaper/compare/v1.1.1...HEAD
+[Unreleased]: https://github.com/jedbrnth-eng/lucid-live-wallpaper/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/jedbrnth-eng/lucid-live-wallpaper/compare/v1.2.0...v1.3.0
+[1.2.0]: https://github.com/jedbrnth-eng/lucid-live-wallpaper/compare/v1.1.1...v1.2.0
 [1.1.1]: https://github.com/jedbrnth-eng/lucid-live-wallpaper/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/jedbrnth-eng/lucid-live-wallpaper/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/jedbrnth-eng/lucid-live-wallpaper/compare/v1.0.0...v1.0.1

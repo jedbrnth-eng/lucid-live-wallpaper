@@ -13,44 +13,34 @@ import Security
 import UniformTypeIdentifiers
 import ImageIO
 
-final class PreviewPlayer: ObservableObject {
-    let player = AVQueuePlayer()
-    private var looper: AVPlayerLooper?
-    func start(_ url: URL) {
-        player.isMuted = true
-        looper = AVPlayerLooper(player: player, templateItem: AVPlayerItem(url: url))
-        player.play()
-    }
-    func stop() { player.pause(); looper?.disableLooping(); looper = nil; player.removeAllItems() }
-}
-
 struct DetailView: View {
     let item: WallItem
     @EnvironmentObject var store: Store
     @EnvironmentObject var dl: Downloader
     @Environment(\.dismiss) private var dismiss
-    @StateObject private var preview = PreviewPlayer()
-    @State private var started = false
 
     var body: some View {
         let lib = store.libraryItem(item.id)
         let it = lib ?? item
         VStack(alignment: .leading, spacing: 14) {
-            ZStack {
-                if it.kind == .video && started {
-                    VideoPlayer(player: preview.player).disabled(true)
-                } else {
-                    RemoteImage(url: it.previewURL.flatMap { it.kind == .image ? $0 : nil } ?? it.thumbURL, localPath: it.kind == .image ? it.localPath : it.thumbPath)
+            // Poster first; a clip already on this Mac fades in and loops (muted, small copy). Others stay a poster.
+            Color.clear
+                .aspectRatio(16 / 9, contentMode: .fit)
+                .overlay(RemoteImage(url: it.previewURL.flatMap { it.kind == .image ? $0 : nil } ?? it.thumbURL, localPath: it.kind == .image ? it.localPath : it.thumbPath))
+                .overlay(PreviewLayer(item: it, wanted: true, pinned: true, size: .large, dwell: 0))
+                .clipShape(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous).stroke(Theme.line))
+                .overlay(alignment: .bottomLeading) {
+                    if it.kind == .video && PreviewPolicy.previewPath(it) == nil {
+                        MonoPill(text: "PREVIEW PLAYS ONCE IT'S ON THIS MAC", dot: Theme.pink).padding(12)
+                    }
                 }
-            }
-            .aspectRatio(16 / 9, contentMode: .fit)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(accent.opacity(0.3)))
+                .accessibilityLabel("Preview of \(it.title)")
 
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(it.title).font(.title2.bold()).lineLimit(2)
-                    Text([it.author, it.category, it.source.label].compactMap { $0 }.joined(separator: " · ")).foregroundStyle(.secondary)
+                    Text(it.title).font(.system(size: 24, weight: .bold)).tracking(-0.5).foregroundStyle(Theme.ink).lineLimit(2)
+                    Text([it.author, it.category, it.source.label].compactMap { $0 }.joined(separator: " · ")).foregroundStyle(Theme.muted)
                     if let t = it.tags, !t.isEmpty { Text(t.map { "#\($0)" }.joined(separator: " ")).font(.caption).foregroundStyle(accent.opacity(0.8)) }
                 }
                 Spacer()
@@ -69,17 +59,11 @@ struct DetailView: View {
                 Text("License: \(it.license ?? "—")").font(.callout).foregroundStyle(.secondary).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
                 if let u = it.termsURL.flatMap(URL.init(string:)) ?? it.source.licenseURL { Link("terms ↗", destination: u).font(.callout) }
             }
-            if let p = dl.progress[item.id] {
-                HStack {
-                    ProgressView(value: p).tint(accent)
-                    Text("\(Int(p * 100))%").font(.caption.monospacedDigit())
-                    Button("Cancel") { dl.cancel(item.id) }.buttonStyle(.borderless)
-                }
-            }
-            if let e = dl.errors[item.id] { Label(e, systemImage: "exclamationmark.triangle").foregroundStyle(.orange) }
+            DownloadStatusRow(id: item.id)
+            if let lib, lib.isLocalReady { WallpaperOptionsRow(item: lib) }
             HStack(spacing: 10) {
                 Button { store.setWallpaper(it) } label: { Label("Set as Wallpaper", systemImage: "sparkles.tv") }
-                    .buttonStyle(.borderedProminent).tint(accent.opacity(0.85)).keyboardShortcut(.defaultAction)
+                    .buttonStyle(.pillPrimary).keyboardShortcut(.defaultAction)
                     .disabled(dl.progress[item.id] != nil)
                 if NSScreen.screens.count > 1 {
                     Menu("Set on Display") {
@@ -104,14 +88,9 @@ struct DetailView: View {
                 Button("Close") { dismiss() }.keyboardShortcut(.cancelAction)
             }
         }
-        .padding(20)
+        .padding(22)
         .frame(width: 820)
-        .onAppear {
-            guard it.kind == .video else { return }
-            let src: URL? = it.localPath.map { URL(fileURLWithPath: $0) } ?? it.previewURL.flatMap(URL.init(string:))
-            if let src { preview.start(src); started = true }
-        }
-        .onDisappear { preview.stop() }
+        .background(Theme.backdrop)
     }
 }
 

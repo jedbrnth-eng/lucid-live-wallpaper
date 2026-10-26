@@ -1,0 +1,14 @@
+# UI-free Lucid sources compiled into the unit tests (one path per line).
+Sources/Lucid/Audio/AudioAnalyser.swift
+Sources/Lucid/Audio/Reactive.swift
+Sources/Lucid/DayNight/SunTimes.swift
+Sources/Lucid/Core/Models.swift
+Sources/Lucid/Engine/PausePolicy.swift
+Sources/Lucid/Media/ImportPolicy.swift
+Sources/Lucid/Store/PlaylistScheduler.swift
+Sources/Lucid/Hotkeys/Hotkey.swift
+Sources/Lucid/Weather/Weather.swift
+Sources/Lucid/Update/UpdateCheck.swift
+Sources/Lucid/Store/HomeModel.swift
+Sources/Lucid/Engine/DownloadPolicy.swift
+Sources/Lucid/Media/ProcessRunner.swift

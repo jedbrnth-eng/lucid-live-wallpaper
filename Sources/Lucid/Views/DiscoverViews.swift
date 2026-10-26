@@ -47,7 +47,8 @@ enum LiveSort: String, CaseIterable { case featured = "Featured", name = "Name",
 
 struct LiveView: View {
     @EnvironmentObject var store: Store
-    @State private var theme = "All"
+    @State private var theme: String
+    init(initialTheme: String = "All") { _theme = State(initialValue: initialTheme) }
     @State private var col = "All"
     @State private var sort = LiveSort.featured
     @State private var q = ""

@@ -141,6 +141,7 @@ struct PlaylistView: View {
     @State private var renaming = false
     @State private var name = ""
     @State private var confirmDelete = false
+    @State private var timesText = ""
     var body: some View {
         if let pl = store.playlists.first(where: { $0.id == id }) {
             content(pl)
@@ -149,8 +150,10 @@ struct PlaylistView: View {
         }
     }
     private func content(_ pl: Playlist) -> some View {
-        let active = store.activePlaylistID == id
-        let sub = "\(pl.items.count) wallpaper\(pl.items.count == 1 ? "" : "s") · rotates every \(Store.intervalLabel(pl.minutes))" + (pl.shuffle ? " · shuffled" : " · in order") + (active ? " · PLAYING" : "")
+        let active = store.isPlaying(id)
+        let times = PlaylistScheduler.formatTimes(pl.times)
+        let sub = "\(pl.items.count) wallpaper\(pl.items.count == 1 ? "" : "s") · " + (times.isEmpty ? "rotates every \(Store.intervalLabel(pl.minutes))" : "changes at \(times)")
+            + (pl.shuffle ? " · shuffled" : " · in order") + (active ? " · PLAYING on \(store.playingWhere(id))" : "")
         return ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 Header(title: pl.name, subtitle: sub)
@@ -177,14 +180,31 @@ struct PlaylistView: View {
     }
     private func controls(_ pl: Playlist, active: Bool) -> some View {
         HStack(spacing: 12) {
-            Button { active ? store.stopPlaylist() : store.playPlaylist(id) } label: {
+            Button { active ? store.stopPlaylist(id) : store.playPlaylist(id) } label: {
                 Label(active ? "Stop Playlist" : "Play Playlist", systemImage: active ? "stop.fill" : "play.fill")
             }.buttonStyle(.borderedProminent).tint(active ? .orange : accent.opacity(0.85)).disabled(pl.items.isEmpty)
+                .accessibilityLabel(active ? "Stop playlist \(pl.name)" : "Play playlist \(pl.name) on all displays")
+            if NSScreen.screens.count > 1 {
+                Menu("Play on") {
+                    Button("All Displays") { store.playPlaylist(id) }
+                    Divider()
+                    ForEach(NSScreen.screens, id: \.stableKey) { s in Button(s.localizedName) { store.playPlaylist(id, screenKey: s.stableKey) } }
+                }.fixedSize().disabled(pl.items.isEmpty).accessibilityLabel("Play this playlist on one display")
+            }
             if active { Button { store.next() } label: { Label("Next", systemImage: "forward.fill") } }
             Toggle("Shuffle", isOn: Binding(get: { pl.shuffle }, set: { var p = pl; p.shuffle = $0; store.updatePlaylist(p) })).toggleStyle(.switch)
             Picker("Change every", selection: Binding(get: { pl.minutes }, set: { var p = pl; p.minutes = $0; store.updatePlaylist(p) })) {
                 ForEach([5, 15, 30, 60, 180, 360, 1440], id: \.self) { Text(Store.intervalLabel($0)).tag($0) }
-            }.frame(maxWidth: 220)
+            }.frame(maxWidth: 220).disabled(!PlaylistScheduler.sanitize(pl.times).isEmpty)
+            TextField("or at times, e.g. 07:00, 18:30", text: $timesText)
+                .textFieldStyle(.roundedBorder).frame(maxWidth: 210)
+                .onAppear { timesText = PlaylistScheduler.formatTimes(pl.times) }
+                .onSubmit {
+                    var p = pl; let t = PlaylistScheduler.parseTimes(timesText); p.times = t.isEmpty ? nil : t
+                    store.updatePlaylist(p); timesText = PlaylistScheduler.formatTimes(p.times)
+                }
+                .help("Change at these times of day instead of on a timer. Leave empty to use the timer.")
+                .accessibilityLabel("Times of day to change wallpaper")
             Spacer()
             Menu {
                 Button("Rename…") { name = pl.name; renaming = true }

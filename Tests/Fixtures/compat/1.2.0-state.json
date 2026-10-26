@@ -1,0 +1,44 @@
+{
+  "all" : {
+    "itemID" : "local:Neon-123",
+    "kind" : "video",
+    "path" : "\/Users\/example\/Library\/Application Support\/Lucid\/Media\/Neon-3f.mp4",
+    "title" : "Neon"
+  },
+  "dayNight" : {
+    "*" : {
+      "day" : {
+        "itemID" : "local:Neon-123",
+        "kind" : "video",
+        "path" : "\/Users\/example\/Library\/Application Support\/Lucid\/Media\/Neon-3f.mp4",
+        "title" : "Neon"
+      },
+      "night" : {
+        "itemID" : "nasa:abc",
+        "kind" : "image",
+        "path" : "\/tmp\/earth.jpg",
+        "title" : "Earth"
+      }
+    }
+  },
+  "perScreen" : {
+    "DISPLAY-B" : {
+      "itemID" : "nasa:abc",
+      "kind" : "image",
+      "path" : "\/tmp\/earth.jpg",
+      "title" : "Earth"
+    },
+    "DISPLAY-C" : {
+      "itemID" : "local:Neon-123",
+      "kind" : "video",
+      "path" : "\/Users\/example\/Library\/Application Support\/Lucid\/Media\/Neon-3f.mp4",
+      "reactive" : {
+        "bars" : true,
+        "glow" : false,
+        "pulse" : true
+      },
+      "title" : "Neon"
+    }
+  },
+  "userPaused" : true
+}
