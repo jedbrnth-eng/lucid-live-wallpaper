@@ -20,21 +20,22 @@
   <a href="https://lucid-wallpaper.vercel.app"><b>Website</b></a> ·
   <a href="#download-no-terminal-needed">Download</a> ·
   <a href="#whats-inside">Features</a> ·
+  <a href="#what-lucid-cant-do">Limits</a> ·
   <a href="#bring-your-own">Bring your own</a> ·
   <a href="#where-the-wallpapers-come-from">Sources</a> ·
   <a href="#privacy">Privacy</a>
 </p>
 
 <p align="center">
-  <a href="docs/demo.mp4"><img src="docs/demo.webp" alt="Picking a wallpaper in Lucid and applying it to the macOS desktop" width="860"></a><br>
-  <sub>Pick a wallpaper, click Apply, and the desktop changes. <a href="docs/demo.mp4">Watch in full HD</a>.</sub>
+  <a href="docs/demo.mp4"><img src="docs/demo.webp" alt="Lucid 1.3: the Home page with a featured wallpaper playing, rows of wallpapers, a detail sheet, Apple Aerials, Live 4K and Apply" width="860"></a><br>
+  <sub>Lucid 1.3: Home, a live preview, Apple Aerials, Live 4K, then Apply. Recorded from the app window. <a href="docs/demo.mp4">Watch the 1-minute tour</a>.</sub>
 </p>
 
 ---
 
 <p align="center">
   <a href="https://github.com/jedbrnth-eng/lucid-live-wallpaper/releases/latest/download/Lucid.zip"><img src="https://img.shields.io/badge/%E2%AC%87%20Download%20Lucid%20for%20Mac-Free-7c5cff?style=for-the-badge&logo=apple&logoColor=white" alt="Download Lucid for Mac, free" height="56"></a><br>
-  <sub>Free · Apple Silicon (M1 or newer) · macOS 14+ · about 2 MB</sub>
+  <sub>Free · Apple Silicon (M1 or newer) · macOS 14+ · about 3 MB</sub>
 </p>
 
 ## Download (no Terminal needed)
@@ -89,11 +90,23 @@ rm -rf /Applications/Lucid.app "$HOME/Library/Application Support/Lucid"
 ## Take a look
 
 <p align="center">
-  <img src="docs/screenshot-home.jpg" alt="Lucid's Home page: a featured wallpaper playing above rows of wallpapers" width="860">
+  <img src="docs/screenshot-home.jpg" alt="Lucid's Home page: a featured wallpaper playing above rows of wallpapers" width="860"><br>
+  <sub>Home: the featured wallpaper plays, rows scroll sideways.</sub>
 </p>
 
 <p align="center">
-  <img src="docs/screenshot.png" alt="Lucid showing the Apple Aerials catalog" width="860">
+  <img src="docs/screenshot.png" alt="Lucid showing the Apple Aerials catalog" width="860"><br>
+  <sub>Apple Aerials: the films already on your Mac apply instantly.</sub>
+</p>
+
+<p align="center">
+  <img src="docs/screenshot-live4k.jpg" alt="Lucid's Live 4K page with 594 clips, a category menu and sorting" width="860"><br>
+  <sub>Live 4K: 594 curated clips, by category.</sub>
+</p>
+
+<p align="center">
+  <img src="docs/screenshot-settings.jpg" alt="Lucid's Settings: Day and Night, Weather wallpapers, adding wallpapers and power saving" width="860"><br>
+  <sub>Settings: Day &amp; Night, optional weather, how files are added, and smart pausing.</sub>
 </p>
 
 <p align="center">
@@ -105,19 +118,18 @@ rm -rf /Applications/Lucid.app "$HOME/Library/Application Support/Lucid"
 
 | Feature | |
 |---|---|
-| **Home** | A featured wallpaper that plays, then rows to scroll sideways: recently used, most used (counted only on your Mac), hand-picked featured clips, favorites, new, and one row per category. |
-| **Live previews** | Hover a card and the clip plays, muted, so you see it as it will look. Only clips already on your Mac, from a small cached copy; at most 3 play at once, and all stop when Lucid is in the background or your Mac is saving power. Reduce Motion shows still posters. |
-| **Live 4K catalog** | About 590 curated moving wallpapers from ESA/Webb, ESA/Hubble, ESO, NASA and Wikimedia Commons. Browse by category (Space, Nature & Landscapes, Ocean & Beaches, Sky & Time-lapse, Cities). Every clip is verified at 3840×2160 or larger and turned into a seamless loop. |
+| **Home + live previews** | Opens on a featured wallpaper that plays, then rows to scroll sideways: recently used, most used (counted only on your Mac), hand-picked featured clips, favorites, new, and one row per category. Hover a card and the clip plays, muted, so you see it as it will look. Only clips already on your Mac preview, from a small cached copy; at most 3 play at once, and all stop when Lucid is in the background or your Mac is saving power. Reduce Motion shows still posters. |
+| **590+ live 4K clips** | 594 curated moving wallpapers from ESA/Webb, ESA/Hubble, ESO, NASA and Wikimedia Commons. Browse by category (Space, Nature & Landscapes, Ocean & Beaches, Sky & Time-lapse, Cities). Every clip is verified at 3840×2160 or larger and turned into a seamless loop. |
 | **Apple Aerials** | Apple's own 4K aerial films. The ones already on your Mac apply instantly; others download from Apple when you pick them. |
-| **Stills** | NASA 4K Space and Wikimedia 4K Photos, with the license shown on every item. |
-| **Your own library** | Drag in your own videos and photos, or whole folders. Copy them in or use them where they are. Per wallpaper: fill, fit or stretch, which part to keep when cropping, and playback speed. Damaged or non-media files are refused with a clear message. Anything below 4K is flagged. |
-| **Every display** | A different wallpaper on each monitor, favorites and open at login. Switch to a recent wallpaper straight from the menu bar. |
-| **Playlists** | Rotate on a timer or at times of day you choose, on all displays or one display each. Shuffle never repeats an item until all have played, and playback picks up where it was after a restart. |
-| **Shortcuts** | Optional global shortcuts for pause/resume, next and previous (for example ⌃⌥⌘P, ⌃⌥⌘→, ⌃⌥⌘←). No Accessibility permission needed. |
+| **Your own files** | Drag in your own videos and photos, or whole folders. Copy them in or use them where they are. Per wallpaper: fill, fit or stretch, which part to keep when cropping, and playback speed. Damaged or non-media files are refused with a clear message. Anything below 4K is flagged. |
 | **Audio reactive** | Optional: wallpapers pulse on the bass, glow with the volume or show spectrum bars, driven by the sound your Mac plays (never the microphone). Off by default. |
 | **Day & Night** | One wallpaper by day, another at night, switching at sunrise and sunset (or at fixed times) with a soft cross-fade. Optional dawn and dusk wallpapers for the twilight in between. |
-| **Weather** | Optional: a different wallpaper when it rains, snows, is clear or cloudy. Off by default. |
+| **Playlists** | Rotate on a timer or at times of day you choose, on all displays or one display each. Shuffle never repeats an item until all have played, and playback picks up where it was after a restart. |
 | **Smart pausing** | Pauses behind full-screen apps, when the screen locks or the display sleeps, in Low Power Mode, below a battery level you pick, when your Mac runs hot, or (optionally) when the CPU is busy. A status line says why. After a long pause the players are closed to free memory. |
+| **Shortcuts** | Optional global shortcuts for pause/resume, next and previous (for example ⌃⌥⌘P, ⌃⌥⌘→, ⌃⌥⌘←). No Accessibility permission needed. |
+| **Weather and update check** | Both optional and off by default: a different wallpaper when it rains, snows, is clear or cloudy, and a once-a-day check that shows a link when a new release is out (nothing installs itself). |
+| **Stills** | NASA 4K Space and Wikimedia 4K Photos, with the license shown on every item. |
+| **Every display** | A different wallpaper on each monitor, favorites and open at login. Switch to a recent wallpaper straight from the menu bar. |
 | **Private by design** | No account, no analytics, no telemetry. Native SwiftUI and AppKit, no dependencies. |
 
 ## Use it
@@ -174,9 +186,14 @@ Turn on **Settings → Weather wallpapers**, then in **Displays → Weather…**
 - Offline or no answer? Nothing changes. A reading older than 3 hours is ignored.
 - Weather data by Open-Meteo.com, [CC BY 4.0](https://open-meteo.com/en/licence).
 
-## Limits
+## What Lucid can't do
 
-- **Lock Screen:** macOS has no public way for apps to put a moving wallpaper on the Lock Screen, so Lucid doesn't. A screen saver version is possible but not shipped yet: see [docs/lock-screen-feasibility.md](docs/lock-screen-feasibility.md).
+Straight answers, so you don't have to find out after installing:
+
+- **No moving Lock Screen.** macOS has no public way for apps to put video on the Lock Screen, so Lucid doesn't. A screen saver version is possible but not shipped yet: see [docs/lock-screen-feasibility.md](docs/lock-screen-feasibility.md).
+- **No Wallpaper Engine files.** Wallpaper Engine projects (scenes, web and application wallpapers, `.pkg` files) don't open. Lucid plays ordinary video and photo files.
+- **Not notarized by Apple (yet).** The first launch needs the one-time **Open Anyway** step above, or the installer script.
+- **Apple Silicon only.** Lucid is built for M1 or newer on macOS 14 Sonoma or later. Intel Macs aren't supported.
 - Global shortcuts come from a fixed list of combinations (no custom recorder yet).
 - Converting WebM/MKV needs ffmpeg; MP4 and MOV don't.
 
