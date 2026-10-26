@@ -12,8 +12,16 @@ Requires macOS 14+ on Apple Silicon.
 
 ## Test
 ```
+./test.sh                                         # unit tests for the UI-free Swift code (offline)
 python3 -m unittest tools/test_build_catalog.py   # offline catalog-builder tests
 ./selftest.sh                                     # network check: every source returns only 4K+ items
+```
+
+New UI-free logic goes in a file that imports only Foundation (or Accelerate) and is listed in `Tests/pure-sources.txt`, with tests in `Tests/`. Write the failing test first.
+
+To try a development build without touching your real library, run it against a throwaway folder:
+```
+LUCID_SUPPORT_DIR=/tmp/lucid-dev build/Lucid.app/Contents/MacOS/Lucid
 ```
 
 ## Guidelines
