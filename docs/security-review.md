@@ -23,7 +23,7 @@ Reviewed for 1.3.0 on 2026-10-26; Home page and live previews added the same day
 
 `grep -rn "Process()\|NSTask\|NSAppleScript\|osascript\|system(\|popen\|posix_spawn" Sources tools *.sh .github`:
 
-- `Sources/Lucid/Media/LoopMaker.swift` (`Transcoder.toHEVC`): runs ffmpeg from a fixed list of paths (`/opt/homebrew/bin`, `/usr/local/bin`, `/usr/bin`), with an argument array (no shell). The only variable arguments are the absolute input and output paths (they start with `/`, so they can't be read as ffmpeg options). Residual risk: ffmpeg parses an untrusted file the user chose; a malicious file could target an ffmpeg bug. A process running as the user could also replace a user-writable ffmpeg, but it could already do anything Lucid can.
+- `Sources/Lucid/Media/ProcessRunner.swift` (`ProcessRunner.run`, the only `Process()`), used by `Transcoder.toHEVC` and `Transcoder.declaredDuration` in `Sources/Lucid/Media/LoopMaker.swift`: runs ffmpeg (and the ffprobe next to it) from a fixed list of paths (`/opt/homebrew/bin`, `/usr/local/bin`, `/usr/bin`), with an argument array (no shell). The only variable arguments are the absolute input and output paths (they start with `/`, so they can't be read as options). Cancelling sends SIGTERM, then SIGKILL 2 s later if the tool is still running; standard output is read while the tool runs. Residual risk: ffmpeg parses an untrusted file the user chose; a malicious file could target an ffmpeg bug. A process running as the user could also replace a user-writable ffmpeg, but it could already do anything Lucid can.
 - `install.sh`: `osascript -e 'tell application "Lucid" to quit'`, a constant string.
 - No other `Process`, `NSTask`, AppleScript, shell or `system()` call. No user string ever reaches a shell.
 

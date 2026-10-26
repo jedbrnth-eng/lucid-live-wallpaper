@@ -117,7 +117,8 @@ enum HomeBuilder {
         add(.favorites, "Favorites", "Everything you ♥", i.favorites.map { resolve($0.id) ?? $0 })
         let cutoff = i.now.addingTimeInterval(-newWithinDays * 86400)
         add(.recentlyAdded, "New in your library", "Added in the last two weeks",
-            ready.filter { ($0.addedAt ?? .distantPast) >= cutoff }.sorted { $0.addedAt! > $1.addedAt! })
+            ready.filter { $0.addedAt.map { $0 >= cutoff } ?? false }
+                .sorted { ($0.addedAt ?? .distantPast) > ($1.addedAt ?? .distantPast) })
         for t in i.themes {
             add(.category(t), t, "Live 4K", i.live.filter { i.theme($0) == t }.map { resolve($0.id) ?? $0 })
         }

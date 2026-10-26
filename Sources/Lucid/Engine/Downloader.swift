@@ -33,6 +33,8 @@ import ImageIO
     var conversionTimeout = DownloadPolicy.conversionTimeout
     /// Development check hook: called on every phase change (not every percent).
     static var phaseHook: ((String, DownloadPhase) -> Void)?
+    /// Development check hook: called just before the thumbnail is made (lets the check cancel at that moment).
+    static var beforeThumbnailHook: ((String) -> Void)?
 
     override init() {
         super.init()
@@ -60,11 +62,13 @@ import ImageIO
         start(j.item, done: j.done)
     }
     /// Stops the download or the conversion after it; the conversion task deletes its temporary files.
+    /// The job is forgotten too, so a "finished" callback already on its way can't bring the download back.
     func cancel(_ id: String) {
-        tasksByItem[id]?.cancel()
-        tasksByItem[id] = nil
-        work[id]?.cancel()
-        work[id] = nil
+        if let t = tasksByItem.removeValue(forKey: id) {
+            jobs[t.taskIdentifier] = nil
+            t.cancel()
+        }
+        work.removeValue(forKey: id)?.cancel()
         progress[id] = nil
     }
 
@@ -114,8 +118,7 @@ import ImageIO
     }
 
     private static func downloadExt(_ item: WallItem) -> String {
-        let ext = item.fileExt ?? URL(string: item.downloadURL ?? "")?.pathExtension ?? (item.kind == .video ? "mp4" : "jpg")
-        return ext.isEmpty ? "bin" : ext
+        DownloadPolicy.downloadExt(fileExt: item.fileExt, downloadURL: item.downloadURL, kind: item.kind)
     }
 
     private func fail(_ job: Job, _ message: String, removing files: [URL] = []) {
@@ -190,22 +193,28 @@ import ImageIO
             }
         }
         if Task.isCancelled { cleanup(); return }
+        // Size, dimensions and thumbnail come from the still-hidden file; the real name appears only in the same
+        // step that adds the item to the library (no wait in between), and a Cancel up to then leaves nothing.
+        let hadThumb = fm.fileExists(atPath: Media.thumbURL(id: id).path)
+        if let (w, h) = await Media.dims(file.path, item.kind) { item.width = w; item.height = h }
+        item.bytes = (try? fm.attributesOfItem(atPath: file.path)[.size] as? Int64) ?? item.bytes
+        Self.beforeThumbnailHook?(id)
+        let thumb = await Media.thumbnail(file.path, item.kind, id: id)
+        func dropThumb() { if !hadThumb, let thumb { try? fm.removeItem(atPath: thumb) } }
+        if Task.isCancelled { dropThumb(); cleanup(); return }
         let final = Paths.media.appendingPathComponent("\(Paths.safe(id)).\(finalExt)")
         try? fm.removeItem(at: final)
-        do { try fm.moveItem(at: file, to: final) } catch { bail(error.localizedDescription); return }
+        do { try fm.moveItem(at: file, to: final) } catch { dropThumb(); bail(error.localizedDescription); return }
         temps.remove(file); cleanup()
-        if let (w, h) = await Media.dims(final.path, item.kind) { item.width = w; item.height = h }
         item.localPath = final.path
-        item.bytes = (try? fm.attributesOfItem(atPath: final.path)[.size] as? Int64) ?? item.bytes
-        item.thumbPath = await Media.thumbnail(final.path, item.kind, id: id)
+        item.thumbPath = thumb
         item.addedAt = Date()
-        if Task.isCancelled { try? fm.removeItem(at: final); return }
         progress[id] = nil
         work[id] = nil
         job.done(item)
     }
 
-    /// At launch: delete what an interrupted download left in Media/ (only regular `.partial-*` and `*.loop.mp4`
+    /// At launch: delete what an interrupted download left in Media/ (only regular `.partial-*` and old `live_*.loop.mp4`
     /// files, never one the library uses). Returns the names removed.
     @discardableResult static func cleanLeftovers(keep: Set<String>, in dir: URL = Paths.media) -> [String] {
         let fm = FileManager.default

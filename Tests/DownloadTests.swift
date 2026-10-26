@@ -96,14 +96,14 @@ func registerDownloadTests() {
     }
 
     // MARK: leftovers
-    test("leftovers: only regular .partial-* and *.loop.mp4 files, never library files") {
+    test("leftovers: only regular .partial-* and live_*.loop.mp4 files, never library files") {
         let entries: [(name: String, isRegularFile: Bool)] = [
-            (".partial-12-ABC", true), (".partial-3-X.webm", true), ("live-abc.loop.mp4", true), ("x.LOOP.MP4", true),
-            ("live-abc.mp4", true), ("photo.jpg", true), (".DS_Store", true), ("partial-1", true), ("a.loop.mov", true),
-            (".partial-dir", false), ("dir.loop.mp4", false), ("kept.loop.mp4", true),
+            (".partial-12-ABC", true), (".partial-3-X.webm", true), ("live_abc.loop.mp4", true), ("live_x.LOOP.MP4", true),
+            ("live_abc.mp4", true), ("photo.jpg", true), (".DS_Store", true), ("partial-1", true), ("live_a.loop.mov", true),
+            (".partial-dir", false), ("live_dir.loop.mp4", false), ("live_kept.loop.mp4", true),
         ]
-        let got = DownloadPolicy.leftovers(entries, keep: ["kept.loop.mp4"])
-        expectEqual(got, [".partial-12-ABC", ".partial-3-X.webm", "live-abc.loop.mp4", "x.LOOP.MP4"])
+        let got = DownloadPolicy.leftovers(entries, keep: ["live_kept.loop.mp4"])
+        expectEqual(got, [".partial-12-ABC", ".partial-3-X.webm", "live_abc.loop.mp4", "live_x.LOOP.MP4"])
         expectEqual(DownloadPolicy.leftovers([]), [])
     }
 

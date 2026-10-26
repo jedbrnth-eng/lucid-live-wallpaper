@@ -98,6 +98,7 @@ import AVFoundation
         await weatherChecks(store, &r)
         await reviewChecks(store, &r)
         await downloadChecks(store, &r)
+        await finalReviewChecks(store, &r)
         // 6. Global shortcuts (dev bundle's own defaults): enable, check all three registered, a second claim of the
         //    same combination is refused by macOS, then turn them off again.
         let hk = HotkeyCenter.shared
@@ -331,12 +332,12 @@ import AVFoundation
         let dir = Paths.make(Paths.support.appendingPathComponent("dl-check", isDirectory: true))
         let outside = Paths.support.appendingPathComponent("outside.mp4")
         try? Data("x".utf8).write(to: outside)
-        for n in [".partial-7-ABC", ".partial-8-DEF.webm", "clip.loop.mp4", "kept.loop.mp4", "clip.mp4", "photo.jpg"] {
+        for n in [".partial-7-ABC", ".partial-8-DEF.webm", "live_clip.loop.mp4", "clip.loop.mp4", "live_kept.loop.mp4", "clip.mp4", "photo.jpg"] {
             try? Data("x".utf8).write(to: dir.appendingPathComponent(n))
         }
         try? fm.createDirectory(at: dir.appendingPathComponent(".partial-dir"), withIntermediateDirectories: true)
         try? fm.createSymbolicLink(at: dir.appendingPathComponent(".partial-link"), withDestinationURL: outside)
-        let gone = Downloader.cleanLeftovers(keep: ["kept.loop.mp4"], in: dir)
+        let gone = Downloader.cleanLeftovers(keep: ["LIVE_KEPT.loop.mp4"], in: dir)
         r["dl_leftovers_removed"] = gone.sorted().joined(separator: ",")
         r["dl_leftovers_remaining"] = ((try? fm.contentsOfDirectory(atPath: dir.path)) ?? []).sorted().joined(separator: ",")
         r["dl_leftovers_link_target_kept"] = fm.fileExists(atPath: outside.path)
@@ -356,6 +357,128 @@ import AVFoundation
         r["dl_webm_in_library_as"] = got?.localPath.map { URL(fileURLWithPath: $0).lastPathComponent } ?? NSNull()
         r["dl_webm_partials_left"] = ((try? fm.contentsOfDirectory(atPath: Paths.media.path)) ?? []).filter { $0.hasPrefix(".partial-") || $0.hasSuffix(".loop.mp4") }.count
         if let got { store.remove(got) }
+    }
+
+    /// 12. Second 1.3.0 review: cancel racing a finished download, cancel while a download is being finished,
+    ///     preview slots that must not fight, previews that follow their item, cancellable preview copies.
+    private static func finalReviewChecks(_ store: Store, _ r: inout [String: Any]) async {
+        let fm = FileManager.default
+        let dl = store.downloader
+        func mediaNames(_ key: String) -> [String] {
+            ((try? fm.contentsOfDirectory(atPath: Paths.media.path)) ?? []).filter { $0.contains(key) || $0.hasPrefix(".partial-") }.sorted()
+        }
+        // M1: the bytes have arrived (callback queued) when Cancel is pressed: the cancel must win.
+        if let png = makePNG(.systemTeal, "final-cancel.png") {
+            var it = WallItem(id: "check:dl-cancel", source: .wikimedia, kind: .image, title: "Check Cancel", width: 320, height: 180)
+            it.downloadURL = png.absoluteString
+            store.download(it)
+            usleep(1_000_000)   // main thread busy: URLSession finishes and queues its callback
+            dl.cancel(it.id)
+            await wait(3)
+            r["final_m1_in_library_after_cancel"] = store.libraryItem(it.id) != nil
+            r["final_m1_progress_after_cancel"] = dl.progress[it.id]?.label ?? NSNull()
+            r["final_m1_media_files"] = mediaNames("check_dl-cancel").joined(separator: ",")
+            if let got = store.libraryItem(it.id) { store.remove(got) }
+        }
+        // M2: Cancel while the finished file is being prepared (just before its thumbnail): nothing may be left,
+        //     and the finished name must not be visible to the folder scan before it joins the library.
+        if let png = makePNG(.systemPink, "final-finish.png") {
+            var it = WallItem(id: "check:dl-finish", source: .wikimedia, kind: .image, title: "Check Finish", width: 320, height: 180)
+            it.downloadURL = png.absoluteString
+            let thumb = Paths.thumbs.appendingPathComponent("thumb-\(Paths.safe(it.id)).jpg")
+            try? fm.removeItem(at: thumb)
+            var visible: Bool?
+            Downloader.beforeThumbnailHook = { id in
+                guard id == it.id else { return }
+                visible = mediaNames("check_dl-finish").contains { !$0.hasPrefix(".") }
+                dl.cancel(id)
+            }
+            store.download(it)
+            for _ in 0..<40 where visible == nil { await wait(0.25) }
+            await wait(1.5)
+            Downloader.beforeThumbnailHook = nil
+            r["final_m2_visible_name_before_library"] = visible ?? NSNull()
+            r["final_m2_in_library_after_cancel"] = store.libraryItem(it.id) != nil
+            r["final_m2_orphan_thumbnail"] = fm.fileExists(atPath: thumb.path)
+            r["final_m2_media_files"] = mediaNames("check_dl-finish").joined(separator: ",")
+            if let got = store.libraryItem(it.id) { store.remove(got) }
+        }
+        // M5: a preview cache folder holding something that isn't a cached copy: pruning must leave it alone.
+        let pdir = Paths.make(Paths.support.appendingPathComponent("prune-check", isDirectory: true))
+        let sub = Paths.make(pdir.appendingPathComponent("not-a-copy", isDirectory: true))
+        try? Data("keep".utf8).write(to: sub.appendingPathComponent("inside.txt"))
+        let old = Date(timeIntervalSince1970: 1_000_000_000)
+        try? fm.setAttributes([.modificationDate: old], ofItemAtPath: sub.path)
+        for n in 0...PreviewRenditions.maxFiles {
+            let f = pdir.appendingPathComponent("copy\(n)-s.mp4")
+            try? Data("x".utf8).write(to: f)
+            try? fm.setAttributes([.modificationDate: old.addingTimeInterval(Double(n + 1))], ofItemAtPath: f.path)
+        }
+        PreviewRenditions.prune(in: pdir)
+        r["final_m5_prune_kept_folder"] = fm.fileExists(atPath: sub.appendingPathComponent("inside.txt").path)
+        r["final_m5_prune_copies_left"] = ((try? fm.contentsOfDirectory(atPath: pdir.path)) ?? []).filter { $0.hasSuffix(".mp4") }.count
+        guard let v = ProcessInfo.processInfo.environment["LUCID_CHECK_VIDEO"] else { return }
+        // M5: hover then move away while the small copy is being made: the copy must stop.
+        let cid = "check-cancel-copy"
+        PreviewRenditions.forget(id: cid)
+        let t0 = Date()
+        let job = Task { await PreviewRenditions.shared.url(source: v, id: cid, size: .large) }
+        await wait(0.15)
+        job.cancel()
+        let got = await job.value
+        r["final_m5_cancelled_copy_seconds"] = (Date().timeIntervalSince(t0) * 10).rounded() / 10
+        r["final_m5_cancelled_copy_result"] = got == nil ? "nil" : "made"
+        r["final_m5_cancelled_copy_file_exists"] = fm.fileExists(atPath: PreviewRenditions.file(id: cid, size: .large).path)
+        PreviewRenditions.forget(id: cid)
+
+        // Live previews hosted in a real (off-screen) window, on their own player center (the app's Home window
+        // has its own hero preview on the shared one).
+        let center = PreviewCenter()
+        center.checkAlwaysAllow = true
+        let v2 = Paths.make(Paths.support.appendingPathComponent("final-check", isDirectory: true)).appendingPathComponent("check-video-2.mp4")
+        try? fm.removeItem(at: v2); try? fm.copyItem(at: URL(fileURLWithPath: v), to: v2)
+        func clip(_ id: String, _ path: String?) -> WallItem {
+            var it = WallItem(id: id, source: .local, kind: .video, title: id, width: 3840, height: 2160)
+            it.localPath = path
+            return it
+        }
+        func host<V: View>(_ view: V) -> (NSWindow, NSHostingView<AnyView>) {
+            let h = NSHostingView(rootView: AnyView(view.frame(width: 640, height: 200)))
+            let w = NSWindow(contentRect: NSRect(x: -4000, y: -4000, width: 640, height: 200), styleMask: [.borderless], backing: .buffered, defer: false)
+            w.contentView = h
+            w.orderFrontRegardless()
+            return (w, h)
+        }
+        func players(_ v: NSView) -> [PreviewPlayerView] { (v as? PreviewPlayerView).map { [$0] } ?? v.subviews.flatMap(players) }
+        // H3: two hovered cards and only one free slot (two pinned): one wins, they must not take turns forever.
+        center.request("check-pin-a", pinned: true); center.request("check-pin-b", pinned: true)
+        let e0 = center.evictions
+        let (w1, _) = host(HStack {
+            Color.black.overlay(PreviewLayer(item: clip("check-video", v), wanted: true, center: center))
+            Color.black.overlay(PreviewLayer(item: clip("check-video", v), wanted: true, dwell: 1, center: center))
+        })
+        await wait(4)
+        r["final_h3_takeovers_in_4s"] = center.evictions - e0
+        r["final_h3_players"] = center.activeCount
+        w1.orderOut(nil); w1.contentView = nil
+        await wait(0.5)
+        center.release("check-pin-a"); center.release("check-pin-b")
+        // M3: a hero/detail preview follows its item: starts once the clip is downloaded, switches with the item.
+        let model = CheckPreviewModel(clip("check-video-2", nil), center)
+        let (w2, h2) = host(CheckPreviewHost(model: model))
+        await wait(1.5)
+        r["final_m3_plays_before_download"] = !players(h2).isEmpty
+        model.item = clip("check-video-2", v2.path)
+        var playing: String?
+        for _ in 0..<60 { await wait(0.25); if let u = players(h2).first?.url { playing = u.lastPathComponent; break } }
+        r["final_m3_plays_after_download"] = playing ?? NSNull()
+        model.item = clip("check-video", v)
+        var switched: String?
+        for _ in 0..<60 { await wait(0.25); switched = players(h2).first?.url?.lastPathComponent; if switched == "check-video-s.mp4" { break } }
+        r["final_m3_plays_after_switch"] = switched ?? NSNull()
+        w2.orderOut(nil); w2.contentView = nil
+        await wait(0.3)
+        r["final_players_after_close"] = center.activeCount
     }
 
     private static func homeChecks(_ store: Store, _ r: inout [String: Any]) async {
@@ -466,5 +589,18 @@ import AVFoundation
         let u = Paths.support.appendingPathComponent("check.json")
         if let d = try? JSONSerialization.data(withJSONObject: r, options: [.prettyPrinted, .sortedKeys]) { try? d.write(to: u) }
         NSApp.terminate(nil)
+    }
+}
+
+/// Dev check: a hero/detail-style preview whose item changes while it stays on screen.
+@MainActor final class CheckPreviewModel: ObservableObject {
+    @Published var item: WallItem
+    let center: PreviewCenter
+    init(_ item: WallItem, _ center: PreviewCenter) { self.item = item; self.center = center }
+}
+struct CheckPreviewHost: View {
+    @ObservedObject var model: CheckPreviewModel
+    var body: some View {
+        Color.black.overlay(PreviewLayer(item: model.item, wanted: true, pinned: true, size: .small, dwell: 0, center: model.center))
     }
 }

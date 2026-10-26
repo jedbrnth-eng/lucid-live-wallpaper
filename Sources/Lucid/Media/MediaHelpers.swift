@@ -99,8 +99,9 @@ enum Media {
         gen.requestedTimeToleranceAfter = .positiveInfinity
         return try? await gen.image(at: CMTime(seconds: seconds, preferredTimescale: 600)).image
     }
+    static func thumbURL(id: String) -> URL { Paths.thumbs.appendingPathComponent("thumb-\(Paths.safe(id)).jpg") }
     static func thumbnail(_ path: String, _ kind: Kind, id: String) async -> String? {
-        let out = Paths.thumbs.appendingPathComponent("thumb-\(Paths.safe(id)).jpg")
+        let out = thumbURL(id: id)
         if FileManager.default.fileExists(atPath: out.path) { return out.path }
         var cg: CGImage?
         if kind == .video { cg = await frame(path, maxSize: 640) }

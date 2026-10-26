@@ -17,7 +17,7 @@ All notable changes to Lucid. The format follows [Keep a Changelog](https://keep
 - **Weather wallpapers** (off by default): a different wallpaper when it rains, snows, is clear or cloudy, using Open-Meteo with an approximate location.
 - **Update check** (off by default): once a day, shows a link when a newer release is on GitHub. Nothing is installed automatically.
 - Draft Homebrew cask in `packaging/` (not published) and `docs/lock-screen-feasibility.md` (why Lucid can't animate the Lock Screen, and what a screen saver would take).
-- Unit tests grew from 33 to 137, including saved files written by the real 1.1.1 and 1.2.0 code and recorded Open-Meteo and GitHub responses. The headless development check now covers pausing, import, playlists, shortcuts, weather, the Home rows, the preview player limit and preview copies, a WebM download through every step and the leftover cleanup, and renders every screen including Home.
+- Unit tests grew from 33 to 145, including saved files written by the real 1.1.1 and 1.2.0 code and recorded Open-Meteo and GitHub responses. The headless development check now covers pausing, import, playlists, shortcuts, weather, the Home rows, the preview player limit and preview copies, a WebM download through every step and the leftover cleanup, Cancel racing a finished download, preview players that must not fight or go stale, and renders every screen including Home.
 
 ### Changed
 - The app now matches the website: deep indigo backdrop, the site's cyan/pink/violet accents, pill buttons, 14 pt rounded cards with a soft glow on hover, and tighter headings.
@@ -29,7 +29,14 @@ All notable changes to Lucid. The format follows [Keep a Changelog](https://keep
 ### Fixed
 - **Downloads no longer look stuck at 99%.** After the file arrives, a WebM/OGV/MKV clip is converted for the Mac and a Live 4K clip is made into a seamless loop; for a 4K clip that takes from about half a minute to several minutes, and the bar sat frozen at 99% the whole time. The progress row now says what is happening ("Downloading 63%", "Converting for Mac…", "Making a seamless loop…", "Checking the file…") with a spinner for the steps whose length can't be known. Cancel works at every step (it stops ffmpeg or the loop export and deletes the half-made files), and a step that runs longer than 15 minutes is stopped with a clear message instead of waiting forever. A clip that can't be looped is still kept as it is, as before.
 - **A cut-off download is never added to your library.** Lucid checks the size against the one the server announced, then opens the file before adding it: a photo must decode and end properly, a video must play to its last second, and a converted WebM must be as long as the original says it is (ffmpeg would otherwise turn a cut-off WebM into a shorter clip without complaint). If a check fails you see why, with **Retry**, and nothing is left behind in `Media/`.
-- Half-finished files are kept under hidden `.partial-` names until every check passes, so the scan that picks up files dropped into Lucid's folder can no longer grab one mid-conversion. Leftovers from a quit or crash during a download (`.partial-*` and `*.loop.mp4` in `Media/`, never a file your library uses) are removed at launch.
+- Half-finished files are kept under hidden `.partial-` names until every check passes, so the scan that picks up files dropped into Lucid's folder can no longer grab one mid-conversion. Leftovers from a quit or crash during a download (hidden `.partial-*` files and the `live_*.loop.mp4` halves older versions could leave in `Media/`, never a file your library uses) are removed at launch. A file of your own that merely ends in `.loop.mp4` is never touched.
+- Pressing Cancel while a seamless loop was still being prepared could crash Lucid (AVFoundation refuses to start an export that was already cancelled); the loop step now simply stops. Moving away from a card while its preview copy is being made stops that copy too.
+- Cancel pressed just as a download's last bytes arrived could let the download finish and join the library anyway; Cancel now always wins.
+- A download cancelled while it was being finished no longer leaves a stray thumbnail, and the finished file gets its real name only at the moment it joins the library.
+- A converter that ignores the polite stop (ffmpeg stuck in the hardware encoder) is force-stopped 2 seconds later, so Cancel and the 15-minute limit always end it; a tool's output can no longer fill its pipe and stall it.
+- Two previews wanting the last free player no longer take it from each other over and over (restarting both players every third of a second); the newer one keeps it.
+- The Home hero and the detail sheet start previewing as soon as a clip finishes downloading, and switch to the new clip when the hero changes, instead of staying on a poster or the old clip.
+- Library items without an "added" date can no longer crash the Home page.
 - A playlist playing on all displays no longer wipes a wallpaper or Day/Night pair you set on one display when it changes to the next item (starting the playlist still replaces them, as before).
 - A video's desktop picture that finishes rendering after you already switched wallpapers no longer replaces the newer one.
 - Importing the same file twice at once (for example dropping it twice) adds it once.
@@ -46,6 +53,8 @@ All notable changes to Lucid. The format follows [Keep a Changelog](https://keep
 - Removing a wallpaper deletes only Lucid's own files: real files inside its Media and Thumbs folders, never a link or a path outside them, even if `library.json` says otherwise.
 - Files dropped into Lucid's folder are never followed through links: a link there can no longer make Lucid move or delete the file it points to.
 - The update check opens a release page only if it is exactly `https://github.com/jedbrnth-eng/lucid-live-wallpaper/releases/tag/…` (no `..`, user names, ports, queries or escapes).
+- A download's file extension comes from catalog or provider data, so Lucid now keeps only letters and digits from it: it can never turn the download's temporary or final name into a path outside `Media/`.
+- Trimming the preview cache deletes only its own regular `.mp4` copies, never a folder or link someone put there.
 - Turning off "Use my location" for Day/Night also forgets the saved approximate location.
 - Development test switches (`-lucidCheck`, `-applyAerial`, `-testLive`, …) are read from the command line only, never from saved preferences; the headless check refuses to run without a throwaway `LUCID_SUPPORT_DIR` and keeps its settings apart from yours.
 - The release workflow accepts only an `x.y.z` VERSION and passes it to the shell through the environment.

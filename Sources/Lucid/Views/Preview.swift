@@ -25,6 +25,10 @@ import Combine
     private var attached = false
     private var observers: [NSObjectProtocol] = []
     private var sink: AnyCancellable?
+    /// Used by the dev check: how many players a newer request has taken over so far.
+    private(set) var evictions = 0
+    /// Used by the dev check only: play although the check runs in the background.
+    var checkAlwaysAllow = false { didSet { refresh() } }
 
     /// Called once the main window exists (ContentView.onAppear). Until then nothing plays.
     func attach(_ engine: LucidEngine) {
@@ -53,6 +57,7 @@ import Combine
     /// Ask for a player. Pinned = the hero or the detail sheet (never taken by a hover).
     @discardableResult func request(_ token: String, pinned: Bool = false) -> Bool {
         let r = slots.request(token, pinned: pinned)
+        evictions += r.evicted.count
         publish()
         return r.granted
     }
@@ -70,7 +75,7 @@ import Combine
         && ProcessInfo.processInfo.environment["LUCID_SUPPORT_DIR"] != nil
 
     func refresh() {
-        let ok = attached && PreviewPolicy.shouldPlay(windowVisible: Self.devIgnoreFocus || Self.windowVisible(),
+        let ok = checkAlwaysAllow || attached && PreviewPolicy.shouldPlay(windowVisible: Self.devIgnoreFocus || Self.windowVisible(),
                                                       appActive: Self.devIgnoreFocus || NSApp.isActive,
                                                       reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion, pause: pause)
         _ = slots.setEnabled(ok)
@@ -155,18 +160,24 @@ enum PreviewSize {
         ex.outputFileType = .mp4
         ex.fileLengthLimit = size.maxBytes
         let box = ExportBox(ex)
-        await withCheckedContinuation { (c: CheckedContinuation<Void, Never>) in box.session.exportAsynchronously { c.resume() } }
-        guard box.session.status == .completed else { try? fm.removeItem(at: tmp); return nil }
+        // The card scrolled away or lost hover: stop making the copy.
+        await withTaskCancellationHandler { await box.run() } onCancel: { box.cancel() }
+        guard !Task.isCancelled, box.session.status == .completed else { try? fm.removeItem(at: tmp); return nil }
         try? fm.removeItem(at: out)
         do { try fm.moveItem(at: tmp, to: out) } catch { try? fm.removeItem(at: tmp); return nil }
         return out
     }
 
-    /// Keep the cache bounded (file count and total size): oldest copies go first.
-    private static func prune() {
+    /// Keep the cache bounded (file count and total size): oldest copies go first. Only regular `.mp4` files (the
+    /// copies) are counted or deleted; anything else in the folder is left alone.
+    static func prune(in folder: URL? = nil) {
         let fm = FileManager.default
-        let keys: [URLResourceKey] = [.contentModificationDateKey, .fileSizeKey]
-        guard let files = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: keys, options: [.skipsHiddenFiles]) else { return }
+        let keys: [URLResourceKey] = [.contentModificationDateKey, .fileSizeKey, .isRegularFileKey, .isSymbolicLinkKey]
+        guard let all = try? fm.contentsOfDirectory(at: folder ?? dir, includingPropertiesForKeys: keys, options: [.skipsHiddenFiles]) else { return }
+        let files = all.filter { u in
+            let v = try? u.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
+            return v?.isRegularFile == true && v?.isSymbolicLink != true && u.pathExtension.lowercased() == "mp4"
+        }
         var dated = files.map { u -> (URL, Date, Int64) in
             let v = try? u.resourceValues(forKeys: Set(keys))
             return (u, v?.contentModificationDate ?? .distantPast, Int64(v?.fileSize ?? 0))
@@ -260,7 +271,7 @@ struct PreviewLayer: View {
     var pinned = false
     var size: PreviewSize = .small
     var dwell: Double = 0.35
-    @ObservedObject private var center = PreviewCenter.shared
+    @ObservedObject var center = PreviewCenter.shared   // the dev check passes its own
     @State private var token = UUID().uuidString
     @State private var url: URL?
 
@@ -274,22 +285,27 @@ struct PreviewLayer: View {
         ZStack {
             if isActive, let url { LoopingPreview(url: url).transition(.opacity).allowsHitTesting(false) }
         }
-        .task(id: TaskKey(wanted: wanted, allowed: center.allowed, active: isActive)) {
-            guard wanted, center.allowed, source != nil else { center.release(token); url = nil; return }
-            if !isActive {
-                if dwell > 0 { try? await Task.sleep(nanoseconds: UInt64(dwell * 1_000_000_000)) }
-                guard !Task.isCancelled, wanted else { return }
-                center.request(token, pinned: pinned)
-                return   // the task re-runs once `active` flips
-            }
-            if url == nil, let s = source {
-                url = Self.devOriginal ? URL(fileURLWithPath: s) : await PreviewRenditions.shared.url(source: s, id: item.id, size: size)
-            }
+        // Ask for a player when this starts wanting one (or its clip changes). Losing the player to a newer hover
+        // does not ask again (two hovers would otherwise take it from each other forever); hovering again does.
+        .task(id: RequestKey(id: item.id, source: source, wanted: wanted, allowed: center.allowed)) {
+            guard wanted, center.allowed, source != nil else { center.release(token); return }
+            guard !isActive else { return }
+            if dwell > 0 { try? await Task.sleep(nanoseconds: UInt64(dwell * 1_000_000_000)) }
+            guard !Task.isCancelled, wanted else { return }
+            center.request(token, pinned: pinned)
+        }
+        // Load the clip while holding a player; a different item or a newly downloaded file loads afresh.
+        .task(id: LoadKey(id: item.id, source: source, active: isActive)) {
+            url = nil
+            guard isActive, let s = source else { return }
+            let u = Self.devOriginal ? URL(fileURLWithPath: s) : await PreviewRenditions.shared.url(source: s, id: item.id, size: size)
+            if !Task.isCancelled { url = u }
         }
         .onDisappear { center.release(token); url = nil }
         .accessibilityHidden(true)
     }
-    private struct TaskKey: Equatable { let wanted: Bool; let allowed: Bool; let active: Bool }
+    private struct RequestKey: Equatable { let id: String; let source: String?; let wanted: Bool; let allowed: Bool }
+    private struct LoadKey: Equatable { let id: String; let source: String?; let active: Bool }
     /// Development only (with LUCID_SUPPORT_DIR): play the full 4K file instead of the small copy, to measure the difference.
     private static let devOriginal = ProcessInfo.processInfo.environment["LUCID_DEV_PREVIEW_ORIGINAL"] == "1"
         && ProcessInfo.processInfo.environment["LUCID_SUPPORT_DIR"] != nil

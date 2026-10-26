@@ -105,12 +105,24 @@ enum DownloadPolicy {
     }
 
     /// Names in Media/ that are leftovers of an interrupted download or loop and may be deleted at launch:
-    /// only regular files named `.partial-*` or `*.loop.mp4`, and never a file the library points to.
+    /// only regular files named `.partial-*`, or `live_*.loop.mp4` (the loop half 1.2 and earlier left after a crash),
+    /// and never a file the library points to (compared ignoring case, like the Mac's disk). A file the user dropped
+    /// in that merely ends in `.loop.mp4` is not Lucid's and is never deleted.
     static func leftovers(_ entries: [(name: String, isRegularFile: Bool)], keep: Set<String> = []) -> [String] {
-        entries.filter { e in
-            e.isRegularFile && !keep.contains(e.name) && !e.name.contains("/")
-                && (e.name.hasPrefix(partialPrefix) || e.name.lowercased().hasSuffix(".loop.mp4"))
+        let kept = Set(keep.map { $0.lowercased() })
+        return entries.filter { e in
+            let n = e.name.lowercased()
+            return e.isRegularFile && !kept.contains(n) && !n.contains("/")
+                && (e.name.hasPrefix(partialPrefix) || (n.hasPrefix("live_") && n.hasSuffix(".loop.mp4")))
         }.map(\.name)
+    }
+
+    /// The extension a download is saved under (AVFoundation and ffmpeg go by it). It comes from catalog or
+    /// provider data, so only ASCII letters and digits are kept: it can never add a `/` or `..` to the path.
+    static func downloadExt(fileExt: String?, downloadURL: String?, kind: Kind) -> String {
+        let raw = fileExt ?? URL(string: downloadURL ?? "")?.pathExtension ?? (kind == .video ? "mp4" : "jpg")
+        let ext = String(raw.filter { $0.isASCII && ($0.isLetter || $0.isNumber) }.prefix(10))
+        return ext.isEmpty ? "bin" : ext
     }
 
     private static func mb(_ b: Int64) -> String { String(format: "%.1f MB", Double(b) / 1_000_000) }
