@@ -4,6 +4,8 @@ All notable changes to Lucid. The format follows [Keep a Changelog](https://keep
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-10-26
+
 ### Added
 - **Wallpaper Engine sync.** Link your own Wallpaper Engine folders (Workshop `431960`, `myprojects`, a single item or a Steam library). Lucid reads each `project.json`, keeps the list in sync as folders are added, changed or removed, and shows items on a new **Wallpaper Engine** page with preview, title and tags. Videos play natively (WebM and similar are converted to HEVC once). Web wallpapers run in WebKit with Wallpaper Engine's audio and property listener APIs. Scenes and Windows applications are listed honestly as *Unsupported on Mac*, with an opt-in to use a scene's animated preview as a labelled stand-in. Lucid only links to your files and never copies or shares them.
 - **Audio-reactive wallpapers** (off by default). Captures the sound your Mac plays with a Core Audio tap (macOS 14.2+, never the microphone), analyses it on device, and drives per-display looks: pulse on bass, glow with volume, spectrum bars. Capture stops whenever no reactive wallpaper is playing.
@@ -54,7 +56,8 @@ First public release.
 - Per-display wallpapers, playlists, favorites, auto-change timer and open at login.
 - Battery-friendly playback: pauses when covered, in Low Power Mode, on battery, when locked or the display sleeps.
 
-[Unreleased]: https://github.com/jedbrnth-eng/lucid-live-wallpaper/compare/v1.1.1...HEAD
+[Unreleased]: https://github.com/jedbrnth-eng/lucid-live-wallpaper/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/jedbrnth-eng/lucid-live-wallpaper/compare/v1.1.1...v1.2.0
 [1.1.1]: https://github.com/jedbrnth-eng/lucid-live-wallpaper/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/jedbrnth-eng/lucid-live-wallpaper/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/jedbrnth-eng/lucid-live-wallpaper/compare/v1.0.0...v1.0.1
