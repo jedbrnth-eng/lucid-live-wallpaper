@@ -3,3 +3,4 @@ Sources/Lucid/Audio/AudioAnalyser.swift
 Sources/Lucid/Audio/Reactive.swift
 Sources/Lucid/DayNight/SunTimes.swift
 Sources/Lucid/Core/Models.swift
+Sources/Lucid/Engine/PausePolicy.swift

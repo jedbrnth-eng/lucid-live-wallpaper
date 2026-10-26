@@ -17,10 +17,20 @@ import ImageIO
 @MainActor final class LucidEngine: ObservableObject {
     @Published private(set) var state = EngineState()
     @Published private(set) var pauseReason: String?
+    @Published private(set) var pauseKind: PauseReason?
+    /// "Playing" / "Paused: full-screen app" etc., shown in Settings and the menu bar.
+    @Published private(set) var statusText = "No wallpaper playing"
     @Published private(set) var tick = 0
     private(set) var surfaces: [String: ScreenSurface] = [:]
     private var fading: [ScreenSurface] = []
-    private var locked = false, asleep = false, onBattery = false, lowPower = false
+    private(set) var power = PowerSnapshot()
+    private var cpuGate = CPUGate(thresholdPercent: Pref.cpuAbovePercent, window: 6)
+    private var lastTicks: CPUTicks?
+    /// When every display became paused for a global reason (nil while playing).
+    private(set) var pausedSince: Date?
+    /// Players were released after a long pause; rebuilt on resume.
+    private(set) var parked = false
+    var now: () -> Date = Date.init
     private var timers: [Timer] = []
     private var observers: [NSObjectProtocol] = []
     static let crossfade: TimeInterval = 1.2
@@ -35,7 +45,9 @@ import ImageIO
 
     init() {
         if let d = try? Data(contentsOf: Paths.state), let s = SavedData.state(d) { state = s }
-        lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
+        power.lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
+        power.thermal = Self.thermal()
+        power.userPaused = state.userPaused
         checkBattery()
         observe()
     }
@@ -170,6 +182,7 @@ import ImageIO
     }
 
     func refresh() {
+        if parked { updatePlayback(); return }   // rebuilt by unpark() when playback resumes
         var wanted: [String: (NSScreen, Assignment)] = [:]
         for s in NSScreen.screens {
             if let a = assignment(for: s), needsSurface(a, s), FileManager.default.fileExists(atPath: a.path) { wanted[s.stableKey] = (s, a) }
@@ -214,27 +227,92 @@ import ImageIO
         })
     }
 
+    var pausePrefs: PausePrefs {
+        PausePrefs(pauseOnBattery: Pref.pauseOnBattery, batteryBelowPercent: Pref.batteryBelowPercent, pauseLowPower: Pref.pauseLowPower,
+                   thermalLimit: Pref.thermalLimit, cpuAbovePercent: Pref.cpuAbovePercent, pauseWhenCovered: Pref.pauseWhenCovered)
+    }
+
     func updatePlayback() {
-        var reason: String?
-        if state.userPaused { reason = "Paused" }
-        else if locked { reason = "Screen locked" }
-        else if asleep { reason = "Display asleep" }
-        else if Pref.pauseOnBattery && onBattery { reason = "On battery" }
-        else if Pref.pauseLowPower && lowPower { reason = "Low Power Mode" }
-        pauseReason = reason
+        power.userPaused = state.userPaused
+        let kind = PausePolicy.reason(power, pausePrefs)
+        pauseKind = kind
+        pauseReason = kind.map { $0.label.prefix(1).uppercased() + $0.label.dropFirst() }
+        if kind == nil {
+            pausedSince = nil
+            if parked { unpark(); return }
+        } else if pausedSince == nil { pausedSince = now() }
         var needAudio = false
+        var displays: [DisplayPlayback] = []
         for s in surfaces.values {
             let covered = Pref.pauseWhenCovered && !s.visible
-            let run = reason == nil && !covered
+            let run = kind == nil && !covered
             s.setRunning(run)
+            displays.append(covered ? .covered : .playing)
             if run && (s.assignment.reactive?.any ?? false) { needAudio = true }
         }
+        statusText = PlaybackStatus.text(global: kind, displays: displays)
+        if kind == nil, displays.isEmpty, !currentAssignments.isEmpty { statusText = "Showing a still image" }
         if needAudio != audioNeeded {
             audioNeeded = needAudio
             if !needAudio { surfaces.values.forEach { $0.resetReactive() } }
             onAudioNeedChanged?(needAudio)
         }
         tick += 1
+    }
+
+    // MARK: Memory hygiene: release players after a long pause
+
+    /// Closes every wallpaper window (and its player and decoded frames) while a global pause lasts long.
+    /// The desktop picture (a still of each wallpaper) shows meanwhile. Covered displays are not parked:
+    /// their window is needed to notice when they are uncovered.
+    func checkIdleRelease() {
+        guard !parked, !surfaces.isEmpty, IdleRelease.shouldRelease(pausedSince: pausedSince, now: now(), afterMinutes: Pref.releaseAfterMinutes) else { return }
+        park()
+    }
+    func park() {
+        for s in surfaces.values { s.close() }
+        for s in fading { s.close() }
+        surfaces = [:]; fading = []
+        parked = true
+        if audioNeeded { audioNeeded = false; onAudioNeedChanged?(false) }
+        statusText = PlaybackStatus.text(global: pauseKind, displays: [])
+        tick += 1
+    }
+    private func unpark() {
+        parked = false
+        refresh()
+    }
+
+    private static func thermal() -> ThermalLevel {
+        switch ProcessInfo.processInfo.thermalState {
+        case .nominal: return .nominal
+        case .fair: return .fair
+        case .serious: return .serious
+        case .critical: return .critical
+        @unknown default: return .serious
+        }
+    }
+
+    private static func cpuTicks() -> CPUTicks? {
+        var info = host_cpu_load_info()
+        var count = mach_msg_type_number_t(MemoryLayout<host_cpu_load_info>.stride / MemoryLayout<integer_t>.stride)
+        let kr = withUnsafeMutablePointer(to: &info) { p in
+            p.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { host_statistics(mach_host_self(), HOST_CPU_LOAD_INFO, $0, &count) }
+        }
+        guard kr == KERN_SUCCESS else { return nil }
+        let t = info.cpu_ticks
+        return CPUTicks(user: UInt64(t.0), system: UInt64(t.1), idle: UInt64(t.2), nice: UInt64(t.3))
+    }
+
+    /// Every 5 s while the CPU limit is on: whole-Mac CPU use, averaged over 30 s by the gate.
+    private func sampleCPU() {
+        if cpuGate.thresholdPercent != Pref.cpuAbovePercent { cpuGate = CPUGate(thresholdPercent: Pref.cpuAbovePercent, window: 6) }
+        guard Pref.cpuAbovePercent > 0 else { lastTicks = nil; if power.cpuBusy { power.cpuBusy = false; updatePlayback() }; return }
+        guard let t = Self.cpuTicks() else { return }
+        defer { lastTicks = t }
+        guard let prev = lastTicks, let busy = CPUTicks.busyFraction(from: prev, to: t) else { return }
+        let b = cpuGate.feed(busy)
+        if b != power.cpuBusy { power.cpuBusy = b; updatePlayback() }
     }
 
     /// Latest (smoothed) audio frame, ~30 times a second while capture runs.
@@ -247,28 +325,43 @@ import ImageIO
         guard let blob = IOPSCopyPowerSourcesInfo()?.takeRetainedValue(),
               let type = IOPSGetProvidingPowerSourceType(blob)?.takeRetainedValue() as String? else { return }
         let b = type == "Battery Power"
-        if b != onBattery { onBattery = b; updatePlayback() }
+        var pct: Int?
+        if let list = IOPSCopyPowerSourcesList(blob)?.takeRetainedValue() as? [CFTypeRef] {
+            for ps in list {
+                guard let d = IOPSGetPowerSourceDescription(blob, ps)?.takeUnretainedValue() as? [String: Any],
+                      let cur = d[kIOPSCurrentCapacityKey] as? Int, let mx = d[kIOPSMaxCapacityKey] as? Int, mx > 0 else { continue }
+                pct = Int((Double(cur) / Double(mx) * 100).rounded())
+            }
+        }
+        if b != power.onBattery || pct != power.batteryPercent { power.onBattery = b; power.batteryPercent = pct; updatePlayback() }
     }
+
+    /// Test hook for the headless dev check: pretend a power condition (never touches the real system).
+    func simulate(_ change: (inout PowerSnapshot) -> Void) { change(&power); updatePlayback() }
 
     private func observe() {
         let dnc = DistributedNotificationCenter.default()
         observers.append(dnc.addObserver(forName: .init("com.apple.screenIsLocked"), object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.locked = true; self?.updatePlayback() } })
+            MainActor.assumeIsolated { self?.power.locked = true; self?.updatePlayback() } })
         observers.append(dnc.addObserver(forName: .init("com.apple.screenIsUnlocked"), object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.locked = false; self?.updatePlayback() } })
+            MainActor.assumeIsolated { self?.power.locked = false; self?.updatePlayback() } })
         let wnc = NSWorkspace.shared.notificationCenter
         observers.append(wnc.addObserver(forName: NSWorkspace.screensDidSleepNotification, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.asleep = true; self?.updatePlayback() } })
+            MainActor.assumeIsolated { self?.power.asleep = true; self?.updatePlayback() } })
         observers.append(wnc.addObserver(forName: NSWorkspace.screensDidWakeNotification, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.asleep = false; self?.updatePlayback() } })
+            MainActor.assumeIsolated { self?.power.asleep = false; self?.updatePlayback() } })
         observers.append(wnc.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.asleep = false; self?.refresh() } })
+            MainActor.assumeIsolated { self?.power.asleep = false; self?.refresh() } })
         observers.append(NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.refresh() } })
         observers.append(NotificationCenter.default.addObserver(forName: .NSProcessInfoPowerStateDidChange, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled; self?.updatePlayback() } })
+            MainActor.assumeIsolated { self?.power.lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled; self?.updatePlayback() } })
+        observers.append(NotificationCenter.default.addObserver(forName: ProcessInfo.thermalStateDidChangeNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.power.thermal = Self.thermal(); self?.updatePlayback() } })
         timers.append(Timer.scheduledTimer(withTimeInterval: 20, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.checkBattery() } })
+            MainActor.assumeIsolated { self?.checkBattery(); self?.checkIdleRelease() } })
+        timers.append(Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.sampleCPU() } })
         timers.append(Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.writeStatus() } })
     }
@@ -294,7 +387,9 @@ import ImageIO
             screens.append(row)
         }
         let j: [String: Any] = ["at": Date().timeIntervalSince1970, "pauseReason": pauseReason ?? NSNull(),
-                                "onBattery": onBattery, "lowPower": lowPower, "locked": locked, "phase": phase().rawValue,
+                                "onBattery": power.onBattery, "batteryPercent": power.batteryPercent ?? NSNull(), "lowPower": power.lowPower,
+                                "locked": power.locked, "thermal": power.thermal.rawValue, "cpuBusy": power.cpuBusy, "parked": parked,
+                                "statusText": statusText, "phase": phase().rawValue,
                                 "audioNeeded": audioNeeded, "fading": fading.count, "screens": screens]
         if let d = try? JSONSerialization.data(withJSONObject: j, options: [.prettyPrinted, .sortedKeys]) { try? d.write(to: Paths.status) }
     }

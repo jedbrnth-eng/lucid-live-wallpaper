@@ -19,6 +19,10 @@ struct SettingsView: View {
     @State private var battery = Pref.pauseOnBattery
     @State private var lowPower = Pref.pauseLowPower
     @State private var covered = Pref.pauseWhenCovered
+    @State private var batteryBelow = Pref.batteryBelowPercent
+    @State private var thermal = Pref.thermalLimitRaw
+    @State private var cpu = Pref.cpuAbovePercent
+    @State private var release = Pref.releaseAfterMinutes
     @State private var rotate = Pref.rotateMinutes
     @State private var login = SMAppService.mainApp.status == .enabled
     @State private var loginError: String?
@@ -62,13 +66,36 @@ struct SettingsView: View {
             }
             GroupBox("Power saving") {
                 VStack(alignment: .leading, spacing: 8) {
-                    Toggle("Pause when the desktop is fully covered (full-screen apps, maximized windows)", isOn: $covered)
+                    HStack(spacing: 8) {
+                        Circle().fill(engine.pauseKind == nil && engine.statusText.hasPrefix("Playing") ? accent : Color.orange).frame(width: 8, height: 8)
+                        Text(engine.statusText).font(.callout.weight(.medium))
+                    }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("Playback status: \(engine.statusText)")
+                    Toggle("Pause behind full-screen apps and when the desktop is fully covered", isOn: $covered)
                         .onChange(of: covered) { _, v in Pref.pauseWhenCovered = v; engine.updatePlayback() }
                     Toggle("Pause in Low Power Mode", isOn: $lowPower)
                         .onChange(of: lowPower) { _, v in Pref.pauseLowPower = v; engine.updatePlayback() }
                     Toggle("Pause whenever running on battery", isOn: $battery)
                         .onChange(of: battery) { _, v in Pref.pauseOnBattery = v; engine.updatePlayback() }
-                    Text("Always paused while the screen is locked or asleep. Video is muted and hardware-decoded.").font(.caption).foregroundStyle(.secondary)
+                    Picker("Pause on battery below", selection: $batteryBelow) {
+                        Text("Off").tag(0); ForEach([10, 20, 30, 50], id: \.self) { Text("\($0)%").tag($0) }
+                    }.frame(maxWidth: 300)
+                        .onChange(of: batteryBelow) { _, v in Pref.batteryBelowPercent = v; engine.updatePlayback() }
+                    Picker("Pause when the Mac is hot", selection: $thermal) {
+                        Text("Off").tag(-1); Text("Serious heat (recommended)").tag(ThermalLevel.serious.rawValue)
+                        Text("Any extra heat").tag(ThermalLevel.fair.rawValue); Text("Only critical heat").tag(ThermalLevel.critical.rawValue)
+                    }.frame(maxWidth: 380)
+                        .onChange(of: thermal) { _, v in Pref.thermalLimitRaw = v; engine.updatePlayback() }
+                    Picker("Pause when CPU use stays above", selection: $cpu) {
+                        Text("Off").tag(0); ForEach([60, 75, 90], id: \.self) { Text("\($0)% for 30 s").tag($0) }
+                    }.frame(maxWidth: 380)
+                        .onChange(of: cpu) { _, v in Pref.cpuAbovePercent = v; engine.updatePlayback() }
+                    Picker("Free memory after a pause of", selection: $release) {
+                        Text("Never").tag(0); ForEach([1, 5, 15], id: \.self) { Text("\($0) min").tag($0) }
+                    }.frame(maxWidth: 300)
+                        .onChange(of: release) { _, v in Pref.releaseAfterMinutes = v }
+                    Text("Always paused while the screen is locked or the display sleeps. Video is muted and hardware-decoded. After a long pause the video players are closed to free memory (the still desktop picture shows) and reopen when playback resumes.").font(.caption).foregroundStyle(.secondary)
                 }.frame(maxWidth: .infinity, alignment: .leading).padding(6)
             }
             GroupBox("General") {

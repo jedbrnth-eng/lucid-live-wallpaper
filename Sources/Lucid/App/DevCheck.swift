@@ -58,6 +58,22 @@ import AppKit
                 r["reactive_bars_visible"] = !h.barsLayer.isHidden
             }
             r["audio_status"] = store.audio.status.text
+
+            // 3. Smart pausing + memory hygiene: pretend the display slept, jump the clock past the release delay,
+            //    check every window/player was released, then wake and check it was rebuilt.
+            engine.simulate { $0.asleep = true }
+            r["pause_status_asleep"] = engine.statusText
+            r["pause_running_while_asleep"] = engine.surfaces.values.contains { $0.isRunning && $0.player != nil }
+            let realNow = engine.now
+            engine.now = { realNow().addingTimeInterval(Double(max(1, Pref.releaseAfterMinutes)) * 60 + 1) }
+            engine.checkIdleRelease()
+            engine.now = realNow
+            r["pause_parked"] = engine.parked
+            r["pause_windows_while_parked"] = engine.surfaces.count
+            engine.simulate { $0.asleep = false }
+            await wait(0.5)
+            r["pause_unparked_windows"] = engine.surfaces.count
+            r["pause_status_awake"] = engine.statusText
             engine.clear(screenKey: nil)
             await wait(0.3)
             r["windows_after_clear"] = engine.surfaces.count

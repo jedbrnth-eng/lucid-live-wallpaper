@@ -19,7 +19,7 @@ struct MenuContent: View {
     @Environment(\.openWindow) private var openWindow
     var body: some View {
         Text(engine.currentAssignments.first?.title ?? "No wallpaper set")
-        if let r = engine.pauseReason { Text("Paused — \(r)") }
+        Text(engine.statusText)
         Divider()
         if let p = store.activePlaylist { Text("Playlist: \(p.name)") }
         Divider()
