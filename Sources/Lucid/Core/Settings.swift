@@ -46,6 +46,10 @@ enum Pref {
     static var audioReactive: Bool { get { d.bool(forKey: "audioReactive") } set { d.set(newValue, forKey: "audioReactive") } }
     static var audioSensitivity: Double { get { d.object(forKey: "audioSensitivity") as? Double ?? 1.0 } set { d.set(newValue, forKey: "audioSensitivity") } }
 
+    /// Opt-in daily check of GitHub's latest release (no telemetry, nothing installed automatically).
+    static var updateCheck: Bool { get { d.bool(forKey: "updateCheck") } set { d.set(newValue, forKey: "updateCheck") } }
+    static var lastUpdateCheck: Date? { get { d.object(forKey: "lastUpdateCheck") as? Date } set { d.set(newValue, forKey: "lastUpdateCheck") } }
+
     // Weather wallpapers (off by default; see WeatherService)
     static var weatherEnabled: Bool { get { d.bool(forKey: "weatherEnabled") } set { d.set(newValue, forKey: "weatherEnabled") } }
 

@@ -34,6 +34,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
             HotkeyCenter.shared.apply()
+            UpdateChecker.shared.start()
             let args = UserDefaults.standard
             if args.bool(forKey: "selftest") {
                 Task { @MainActor in

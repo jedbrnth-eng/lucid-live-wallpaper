@@ -219,6 +219,11 @@ import AppKit
             await store.weather.fetch(url: u)
             r["weather_live_condition"] = store.weather.condition?.rawValue ?? NSNull()
             r["weather_live_error"] = store.weather.lastError ?? NSNull()
+            Pref.updateCheck = true
+            UpdateChecker.shared.checkIfDue(force: true)
+            for _ in 0..<40 where UpdateChecker.shared.status == "Checking…" { await wait(0.25) }
+            r["update_check_live_status"] = UpdateChecker.shared.status
+            Pref.updateCheck = false
         }
         e.setWeather(WeatherRule(map: [:]), screenKey: nil)
         e.clear(screenKey: nil)

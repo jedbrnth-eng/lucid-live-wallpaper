@@ -33,6 +33,8 @@ struct SettingsView: View {
     @State private var dim = Pref.dim
     @State private var watch = Pref.watchDownloads
     @State private var inPlace = Pref.importInPlace
+    @State private var updates = Pref.updateCheck
+    @ObservedObject private var updater = UpdateChecker.shared
 
     var body: some View {
         ScrollView { content.padding(.trailing, 12) }.frame(minHeight: 520, idealHeight: 760)
@@ -125,6 +127,13 @@ struct SettingsView: View {
                         }
                     if let e = loginError { Text(e).font(.caption).foregroundStyle(.orange) }
                     Toggle("Make Space Live clips loop seamlessly (cross-fades the end into the start after download)", isOn: $seamless)
+                    Toggle("Check GitHub once a day for a newer version", isOn: $updates)
+                        .onChange(of: updates) { _, v in Pref.updateCheck = v; if v { updater.checkIfDue(force: true) } }
+                    HStack(spacing: 8) {
+                        if !updater.status.isEmpty { Text(updater.status).font(.caption).foregroundStyle(.secondary) }
+                        if let r = updater.available { Link("Open the release page ↗", destination: r.page).font(.caption) }
+                    }
+                    Text("Off by default. Sends one anonymous request to api.github.com, never downloads or installs anything.").font(.caption).foregroundStyle(.secondary)
                 }.frame(maxWidth: .infinity, alignment: .leading).padding(6)
             }
             GroupBox("Content sources (API keys stay in your Keychain)") {

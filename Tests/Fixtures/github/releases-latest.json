@@ -1,0 +1,20 @@
+{
+ "url": "https://api.github.com/repos/jedbrnth-eng/lucid-live-wallpaper/releases/415816195",
+ "html_url": "https://github.com/jedbrnth-eng/lucid-live-wallpaper/releases/tag/v1.1.1",
+ "id": 415816195,
+ "tag_name": "v1.1.1",
+ "name": "Lucid v1.1.1",
+ "draft": false,
+ "prerelease": false,
+ "created_at": "2026-10-17T13:22:06Z",
+ "published_at": "2026-10-17T13:22:58Z",
+ "body": "## Changes in this version\n\n### Added\n- README: a one-click Download button and plain install steps (no Terminal needed).\n\n### Fixed\n- Apple Aerials catalog not found on macOS 26/27, where macOS moved it to `~/Library/Application Support/com.apple.wallpaper/aerials`. Lucid now checks both locations.\n\n## Download\n\n1. Download **Lucid.zip** below (under Assets).\n2. Double-click it, then drag **Lucid.app** into your **Applications** folder.\n3. Open Lucid. Lucid isn't notarized by Apple yet, so macOS will say it can't verify the app. Click **Done**, open **System Settings \u2192 Privacy & Security**, scroll down and click **Open Anyway** next to Lucid, then confirm. You only do this once.\n\nRequires an Apple Silicon Mac (M1 or newer) on macOS 14 Sonoma or later.\n\n**Or install with one command.** Open Terminal, paste this and press Return. It downloads the latest release into Applications and clears macOS's download flag, so you can skip step 3:\n\n```\ncurl -fsSL https://raw.githubusercontent.com/jedbrnth-eng/lucid-live-wallpaper/main/install.sh | bash\n```\n\nWant to read it first? It's [install.sh](https://github.com/jedbrnth-eng/lucid-live-wallpaper/blob/main/install.sh), about 40 lines.\n",
+ "assets": [
+  {
+   "name": "Lucid.zip",
+   "size": 2044741,
+   "content_type": "application/zip",
+   "browser_download_url": "https://github.com/jedbrnth-eng/lucid-live-wallpaper/releases/download/v1.1.1/Lucid.zip"
+  }
+ ]
+}
