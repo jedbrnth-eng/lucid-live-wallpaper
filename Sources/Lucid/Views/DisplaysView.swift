@@ -29,25 +29,25 @@ struct DisplaysView: View {
         guard let d else { return "—" }
         let f = DateFormatter(); f.timeStyle = .short; f.dateStyle = .none; return f.string(from: d)
     }
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                Header(title: "Displays", subtitle: "Each display gets its own looping player. New monitors follow the “All Displays” wallpaper automatically.")
-                HStack {
-                    Button { engine.togglePause() } label: {
-                        Label(engine.state.userPaused ? "Resume All" : "Pause All", systemImage: engine.state.userPaused ? "play.fill" : "pause.fill")
-                    }
-                    Button { store.next() } label: { Label("Random from Library", systemImage: "shuffle") }
-                    Button { dnTarget = DNTarget(screenKey: nil, name: "All Displays") } label: { Label("Day/Night for All…", systemImage: "sun.and.horizon") }
-                    Button { weatherTarget = DNTarget(screenKey: nil, name: "All Displays") } label: { Label("Weather…", systemImage: "cloud.sun.rain") }
-                        .help("Show a different wallpaper when it rains, snows, is clear or cloudy")
-                    if let r = engine.pauseReason { Text("Paused: \(r)").foregroundStyle(.orange) }
-                }
-                if !Pref.audioReactive && engine.currentAssignments.contains(where: { $0.reactive?.any ?? false }) {
-                    Label("Audio reactive is off in Settings, so the looks below are idle.", systemImage: "waveform.slash").font(.caption).foregroundStyle(.orange)
-                }
-                let _ = engine.tick
-                ForEach(NSScreen.screens, id: \.stableKey) { s in
+    private func weatherLine(_ w: WeatherRule) -> String {
+        var parts: [String] = []
+        for c in WeatherCondition.allCases {
+            if let item = w.map[c] { parts.append("\(c.label) → \(item.title)") }
+        }
+        let now: String
+        if let cur = engine.weatherNow() { now = " · now \(cur.label)" } else { now = " · no reading" }
+        return "Weather: " + parts.joined(separator: " · ") + now
+    }
+    private func dayNightLine(_ r: DayNightRule, _ scope: String) -> String {
+        var t = "Day/Night"
+        if scope == EngineState.allKey { t += " (all displays)" }
+        t += ": ☀︎ \(r.day.title) · ☾ \(r.night.title)"
+        if let d = r.dawn { t += " · dawn \(d.title)" }
+        if let d = r.dusk { t += " · dusk \(d.title)" }
+        t += " · now \(dayNight.part.rawValue) · switches \(shortTime(dayNight.nextChange))"
+        return t
+    }
+    @ViewBuilder private func screenRow(_ s: NSScreen) -> some View {
                     let a = engine.assignment(for: s)
                     let lib = a.flatMap { store.libraryItem($0.itemID) }
                     HStack(spacing: 16) {
@@ -64,14 +64,11 @@ struct DisplaysView: View {
                                       systemImage: a.kind == .image ? "photo" : (paused == nil ? "play.circle.fill" : "pause.circle"))
                                     .foregroundStyle(a.kind == .image ? Color.secondary : (paused == nil ? accent : .orange)).font(.caption)
                                 if let w = engine.weatherRule(for: s) {
-                                    Text("Weather: " + WeatherCondition.allCases.compactMap { c in w.map[c].map { "\(c.label) → \($0.title)" } }.joined(separator: " · ")
-                                         + (engine.weatherNow().map { " · now \($0.label)" } ?? " · no reading"))
+                                    Text(weatherLine(w))
                                         .font(.caption2).foregroundStyle(.secondary)
                                 }
                                 if let (r, scope) = engine.rule(for: s) {
-                                    Text("Day/Night\(scope == EngineState.allKey ? " (all displays)" : ""): ☀︎ \(r.day.title) · ☾ \(r.night.title)"
-                                         + (r.dawn.map { " · dawn \($0.title)" } ?? "") + (r.dusk.map { " · dusk \($0.title)" } ?? "")
-                                         + " · now \(dayNight.part.rawValue) · switches \(shortTime(dayNight.nextChange))")
+                                    Text(dayNightLine(r, scope))
                                         .font(.caption2).foregroundStyle(.secondary)
                                 } else {
                                     Text(engine.state.perScreen[s.stableKey] != nil ? "Set for this display only" : "Following “All Displays”")
@@ -93,7 +90,26 @@ struct DisplaysView: View {
                     }
                     .padding(14)
                     .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.05)))
+    }
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                Header(title: "Displays", subtitle: "Each display gets its own looping player. New monitors follow the “All Displays” wallpaper automatically.")
+                HStack {
+                    Button { engine.togglePause() } label: {
+                        Label(engine.state.userPaused ? "Resume All" : "Pause All", systemImage: engine.state.userPaused ? "play.fill" : "pause.fill")
+                    }
+                    Button { store.next() } label: { Label("Random from Library", systemImage: "shuffle") }
+                    Button { dnTarget = DNTarget(screenKey: nil, name: "All Displays") } label: { Label("Day/Night for All…", systemImage: "sun.and.horizon") }
+                    Button { weatherTarget = DNTarget(screenKey: nil, name: "All Displays") } label: { Label("Weather…", systemImage: "cloud.sun.rain") }
+                        .help("Show a different wallpaper when it rains, snows, is clear or cloudy")
+                    if let r = engine.pauseReason { Text("Paused: \(r)").foregroundStyle(.orange) }
                 }
+                if !Pref.audioReactive && engine.currentAssignments.contains(where: { $0.reactive?.any ?? false }) {
+                    Label("Audio reactive is off in Settings, so the looks below are idle.", systemImage: "waveform.slash").font(.caption).foregroundStyle(.orange)
+                }
+                let _ = engine.tick
+                ForEach(NSScreen.screens, id: \.stableKey) { s in screenRow(s) }
             }.padding(24)
         }
         .sheet(item: $dnTarget) { DayNightSheet(target: $0) }
