@@ -53,9 +53,9 @@ Open **Terminal** (press `⌘ Space`, type `Terminal`, press Return), paste this
 curl -fsSL https://raw.githubusercontent.com/jedbrnth-eng/lucid-live-wallpaper/main/install.sh | bash
 ```
 
-Lucid downloads, lands in your Applications folder and opens. Lucid isn't notarized by Apple yet, so the installer clears macOS's download flag for you.
+Lucid downloads, lands in your Applications folder and opens. From 1.3.0 on, the installer checks the download against the SHA-256 checksum published with the release (`Lucid.zip.sha256`) and stops if they differ. Lucid isn't notarized by Apple yet, so the installer clears macOS's download flag for you.
 
-<sub>Needs an Apple Silicon Mac (M1 or newer) on macOS 14 Sonoma or later. Want to read the script first? It's [install.sh](install.sh), about 40 lines. The app is open source, so you can read every line it runs.</sub>
+<sub>Needs an Apple Silicon Mac (M1 or newer) on macOS 14 Sonoma or later. Want to read the script first? It's [install.sh](install.sh), about 60 lines. The app is open source, so you can read every line it runs.</sub>
 
 <details>
 <summary><b>Other ways to install</b></summary>
@@ -104,11 +104,14 @@ rm -rf /Applications/Lucid.app "$HOME/Library/Application Support/Lucid"
 | **Live 4K catalog** | About 590 curated moving wallpapers from ESA/Webb, ESA/Hubble, ESO, NASA and Wikimedia Commons. Browse by category (Space, Nature & Landscapes, Ocean & Beaches, Sky & Time-lapse, Cities). Every clip is verified at 3840×2160 or larger and turned into a seamless loop. |
 | **Apple Aerials** | Apple's own 4K aerial films. The ones already on your Mac apply instantly; others download from Apple when you pick them. |
 | **Stills** | NASA 4K Space and Wikimedia 4K Photos, with the license shown on every item. |
-| **Your own library** | Drag in your own videos and photos, or whole folders. Anything below 4K is flagged. |
-| **Every display** | A different wallpaper on each monitor, playlists, favorites, an auto-change timer, and open at login. Switch to a recent wallpaper straight from the menu bar. |
+| **Your own library** | Drag in your own videos and photos, or whole folders. Copy them in or use them where they are. Per wallpaper: fill, fit or stretch, which part to keep when cropping, and playback speed. Damaged or non-media files are refused with a clear message. Anything below 4K is flagged. |
+| **Every display** | A different wallpaper on each monitor, favorites and open at login. Switch to a recent wallpaper straight from the menu bar. |
+| **Playlists** | Rotate on a timer or at times of day you choose, on all displays or one display each. Shuffle never repeats an item until all have played, and playback picks up where it was after a restart. |
+| **Shortcuts** | Optional global shortcuts for pause/resume, next and previous (for example ⌃⌥⌘P, ⌃⌥⌘→, ⌃⌥⌘←). No Accessibility permission needed. |
 | **Audio reactive** | Optional: wallpapers pulse on the bass, glow with the volume or show spectrum bars, driven by the sound your Mac plays (never the microphone). Off by default. |
-| **Day & Night** | One wallpaper by day, another at night, switching at sunrise and sunset (or at fixed times) with a soft cross-fade. |
-| **Battery-friendly** | Pauses when covered, in Low Power Mode, on battery, when the screen locks or the display sleeps. |
+| **Day & Night** | One wallpaper by day, another at night, switching at sunrise and sunset (or at fixed times) with a soft cross-fade. Optional dawn and dusk wallpapers for the twilight in between. |
+| **Weather** | Optional: a different wallpaper when it rains, snows, is clear or cloudy. Off by default. |
+| **Smart pausing** | Pauses behind full-screen apps, when the screen locks or the display sleeps, in Low Power Mode, below a battery level you pick, when your Mac runs hot, or (optionally) when the CPU is busy. A status line says why. After a long pause the players are closed to free memory. |
 | **Private by design** | No account, no analytics, no telemetry. Native SwiftUI and AppKit, no dependencies. |
 
 ## Use it
@@ -125,7 +128,17 @@ Three ways, pick whichever is easiest:
 - Click **Import…** on the **Downloaded** page.
 - Drop files straight into `~/Library/Application Support/Lucid/Media`. They appear on their own within seconds.
 
-MP4 and MOV work as they are. WebM, MKV and similar formats are converted to HEVC automatically. Your files show up under **Downloaded → My Files**.
+MP4 and MOV work as they are. WebM, MKV and similar formats are converted to HEVC when [ffmpeg](https://ffmpeg.org) is installed (`brew install ffmpeg`). Your files show up under **Downloaded → My Files**.
+
+- **Copy or use in place.** By default Lucid copies a file into its library, so it keeps working if you delete the original. In **Settings → Adding wallpapers** you can choose *Use it where it is* instead; Lucid never deletes those files.
+- **Per wallpaper:** open a wallpaper in your library to pick *Fill (crop)*, *Fit (letterbox)* or *Stretch*, which part to keep when cropping (center, top, bottom, left, right) and its playback speed.
+- Lucid checks each file before adding it: empty files, programs or scripts renamed to `.mp4`, files over 16 GB and damaged videos or photos are refused with a short reason. Folder imports skip hidden files and links that point outside the folder.
+
+## Playlists and shortcuts
+
+Make a playlist from any wallpaper's **Add to playlist** button, then press **Play Playlist** (all displays) or **Play on** a single display. Each playlist changes on a timer (5 minutes to daily) or at times you type, such as `07:00, 12:30, 19:00`. Shuffle plays every item once before repeating and never shows the same one twice in a row. Changes cross-fade, and after a restart the playlist continues where it was.
+
+Turn on **Settings → Keyboard shortcuts** for global pause/resume, next and previous. Lucid registers only those exact key combinations with macOS (no Accessibility or Input Monitoring permission), and marks a shortcut another app already uses instead of taking it. The menu bar shows the same controls plus a status line such as *Playing* or *Paused: full-screen app*.
 
 ## Audio reactive
 
@@ -143,7 +156,23 @@ In **Displays**, click **Day/Night…** for one display, or **Day/Night for All�
 - **Automatic** times come from your time zone's city (for example Bangkok), with no permission needed. Turn on **Use my location** in Settings for more accurate times. The location stays on your Mac.
 - Or choose **Fixed times** (for example day from 07:00, night from 19:00).
 - Lucid checks again after sleep, a time zone change or a clock change, and remembers your pairs after a restart. Near the poles, midnight sun and polar night are handled.
+- Optional **dawn** and **dusk** wallpapers: dawn runs from first light (civil dawn, sun 6° below the horizon) until the sun is 6° up; dusk from the evening golden hour until last light. With fixed times, dawn is the first hour of the day and dusk the last. Pairs set in 1.2.0 work exactly as before.
 - Sunrise and sunset use NOAA's solar equations.
+
+## Weather
+
+Turn on **Settings → Weather wallpapers**, then in **Displays → Weather…** pick a wallpaper for rain, snow, clear or cloudy weather. Conditions without one keep your normal wallpaper.
+
+- Lucid asks [Open-Meteo](https://open-meteo.com) (free, no key, no account) for the current weather at most every 30 minutes, and only while the feature is on and at least one weather wallpaper is set.
+- It sends only an approximate location: your time zone's city, or the location you already allowed for Day & Night, rounded to one decimal place (about 10 km). Lucid never asks for location permission for weather.
+- Offline or no answer? Nothing changes. A reading older than 3 hours is ignored.
+- Weather data by Open-Meteo.com, [CC BY 4.0](https://open-meteo.com/en/licence).
+
+## Limits
+
+- **Lock Screen:** macOS has no public way for apps to put a moving wallpaper on the Lock Screen, so Lucid doesn't. A screen saver version is possible but not shipped yet: see [docs/lock-screen-feasibility.md](docs/lock-screen-feasibility.md).
+- Global shortcuts come from a fixed list of combinations (no custom recorder yet).
+- Converting WebM/MKV needs ffmpeg; MP4 and MOV don't.
 
 ## Where the wallpapers come from
 
@@ -172,22 +201,35 @@ Sources/Lucid/
 ├── Core/       models, paths, preferences, Keychain
 ├── Content/    content providers and the curated Live 4K catalog
 ├── DayNight/   sunrise/sunset (NOAA) and the day/night schedule
-├── Engine/     per-display wallpaper windows and the downloader
-├── Media/      transcoding and seamless loop maker
-├── Store/      app state shared by the views
+├── Engine/     per-display wallpaper windows, smart pausing and the downloader
+├── Hotkeys/    global shortcuts (Carbon RegisterEventHotKey)
+├── Media/      import rules, transcoding and seamless loop maker
+├── Store/      app state shared by the views, playlist scheduling
+├── Update/     optional update check
+├── Weather/    optional weather wallpapers (Open-Meteo)
 └── Views/      SwiftUI screens and components
-Tests/          unit tests (./test.sh) and saved-data fixtures
+Tests/          unit tests (./test.sh) and saved-data / API fixtures
+docs/           security review, lock-screen feasibility, media
+packaging/      draft Homebrew cask (not published)
 tools/          catalog builder and its tests
 ```
 
 ## Privacy
 
-No analytics or telemetry. Audio-reactive analysis and your location (if you turn it on for Day & Night) never leave your Mac. The app only contacts the content sources above (NASA, ESA, ESO, Wikimedia Commons, Apple's servers for Aerial films you choose, and Pixabay if you add a key) to browse and download what you choose.
+No account, no analytics, no telemetry.
+
+- **Audio reactive** (off by default): uses macOS system-audio capture, never the microphone. Sound is analysed on your Mac and never recorded or sent.
+- **Location** (off by default, Day & Night): used to work out sunrise and sunset and stored rounded to about 1 km on your Mac. It is not sent anywhere, except that if you also turn on Weather wallpapers, a further rounded version (about 10 km) goes to Open-Meteo.
+- **Weather** (off by default): one HTTPS request to Open-Meteo at most every 30 minutes, with only rounded coordinates. Without location permission, the coordinates come from your time zone's city.
+- **Update check** (off by default, Settings → General): one anonymous HTTPS request a day to GitHub's public releases API. If a newer version exists, Settings shows a link to its release page. Nothing is downloaded or installed automatically.
+- Otherwise the app only contacts the content sources above (NASA, ESA, ESO, Wikimedia Commons, Apple's servers for Aerial films you choose, and Pixabay if you add a key) to browse and download what you choose.
+
+Security notes and the threat model: [docs/security-review.md](docs/security-review.md).
 
 ## Test
 
 ```
-./test.sh                                          # unit tests: audio analyser, sunrise/sunset, saved-data compatibility (offline)
+./test.sh                                          # unit tests (offline): pausing, import rules, playlists, shortcuts, sun/twilight, weather, update check, saved data
 ./selftest.sh                                      # every source returns only ≥3840×2160 items
 python3 -m unittest tools/test_build_catalog.py    # offline catalog-builder tests
 python3 tools/build_catalog.py catalog.json        # rebuild the Live 4K catalog (slow)
@@ -196,6 +238,7 @@ python3 tools/build_catalog.py catalog.json        # rebuild the Live 4K catalog
 ## Credits
 
 - Sunrise and sunset: NOAA Global Monitoring Laboratory's solar calculator equations (public domain).
+- Weather data: [Open-Meteo.com](https://open-meteo.com), CC BY 4.0.
 
 ## Contributing
 

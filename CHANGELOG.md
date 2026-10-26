@@ -4,6 +4,33 @@ All notable changes to Lucid. The format follows [Keep a Changelog](https://keep
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-10-26
+
+### Added
+- **Smart pausing.** Besides locking, display sleep, Low Power Mode and battery, Lucid now pauses below a battery level you pick (default 20%, on battery only), when your Mac is under serious heat, and optionally while the whole Mac's CPU use stays high for 30 seconds. Settings and the menu bar show a status line ("Playing", "Paused: full-screen app"). After a long pause (default 5 minutes) the video players are closed to free memory and reopen when playback resumes.
+- **Your own files, your way.** Choose to copy imported files into Lucid's library (default) or use them where they are. Per wallpaper: fill, fit or stretch, which part stays visible when cropping, and playback speed.
+- **Playlists on a schedule.** Play a playlist on all displays or on one display each, change on a timer or at times of day (`07:00, 18:30`), shuffle without repeats, cross-fades for photos too, and resume where it was after a restart.
+- **Global shortcuts** (off by default) for pause/resume, next and previous, using macOS hot keys (no Accessibility permission). Conflicts are shown.
+- **Dawn and dusk wallpapers** for Day & Night pairs: civil dawn until the sun is 6° up, and golden hour until last light.
+- **Weather wallpapers** (off by default): a different wallpaper when it rains, snows, is clear or cloudy, using Open-Meteo with an approximate location.
+- **Update check** (off by default): once a day, shows a link when a newer release is on GitHub. Nothing is installed automatically.
+- Draft Homebrew cask in `packaging/` (not published) and `docs/lock-screen-feasibility.md` (why Lucid can't animate the Lock Screen, and what a screen saver would take).
+- Unit tests grew from 33 to 95, including saved files written by the real 1.1.1 and 1.2.0 code and recorded Open-Meteo and GitHub responses. The headless development check now covers pausing, import, playlists, shortcuts, weather and renders every screen.
+
+### Changed
+- Settings are grouped with new Keyboard shortcuts and Weather sections and scroll in the Settings window.
+- Preferences given as launch arguments (for example `-pauseWhenCovered NO`) are now honoured.
+- Library items, Day/Night pairs and playlists gained optional fields; files saved by 1.1.1 and 1.2.0 load unchanged.
+
+### Fixed
+- Opening Settings inside the main window could crash in development builds of this release (a missing shared object); every window now gets the same set, and the development check renders each screen to catch it.
+
+### Security
+- Imports check the file's contents, size and readability before copying, give copies sanitised names inside Lucid's Media folder, skip links that point outside a chosen folder, and never delete files used in place. Lucid now only deletes files strictly inside its Media folder.
+- New network features use HTTPS only, fixed hosts, short timeouts, response size limits and strict parsing, and fail quietly.
+- Releases publish `Lucid.zip.sha256`; `install.sh` verifies it when present and only uses HTTPS, including redirects.
+- `docs/security-review.md` documents every input, every `Process` use and the permissions Lucid asks for.
+
 ## [1.2.0] - 2026-10-26
 
 ### Added
@@ -56,7 +83,8 @@ First public release.
 - Per-display wallpapers, playlists, favorites, auto-change timer and open at login.
 - Battery-friendly playback: pauses when covered, in Low Power Mode, on battery, when locked or the display sleeps.
 
-[Unreleased]: https://github.com/jedbrnth-eng/lucid-live-wallpaper/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/jedbrnth-eng/lucid-live-wallpaper/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/jedbrnth-eng/lucid-live-wallpaper/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/jedbrnth-eng/lucid-live-wallpaper/compare/v1.1.1...v1.2.0
 [1.1.1]: https://github.com/jedbrnth-eng/lucid-live-wallpaper/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/jedbrnth-eng/lucid-live-wallpaper/compare/v1.0.1...v1.1.0
