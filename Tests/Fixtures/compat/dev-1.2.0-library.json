@@ -1,0 +1,42 @@
+[
+ {
+  "id": "local:x",
+  "source": "local",
+  "kind": "video",
+  "title": "Neon",
+  "width": 3840,
+  "height": 2160,
+  "localPath": "/tmp/neon.mp4"
+ },
+ {
+  "id": "we:861750235",
+  "source": "wallpaperEngine",
+  "kind": "web",
+  "title": "Web Clock",
+  "width": 0,
+  "height": 0,
+  "weSupport": "web",
+  "weFolder": "/tmp/we/861750235",
+  "weMainFile": "/tmp/we/861750235/index.html",
+  "weProps": "{}"
+ },
+ {
+  "id": "we:1001",
+  "source": "wallpaperEngine",
+  "kind": "video",
+  "title": "Neon Rain",
+  "width": 0,
+  "height": 0,
+  "weSupport": "video",
+  "weNote": "Video",
+  "weNeedsConversion": false
+ },
+ {
+  "id": "nasa:1",
+  "source": "nasa",
+  "kind": "image",
+  "title": "Earth",
+  "width": 7680,
+  "height": 4320
+ }
+]

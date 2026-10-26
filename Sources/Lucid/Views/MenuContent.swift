@@ -14,7 +14,7 @@ import UniformTypeIdentifiers
 import ImageIO
 
 struct MenuContent: View {
-    @EnvironmentObject var engine: WallpaperEngine
+    @EnvironmentObject var engine: LucidEngine
     @EnvironmentObject var store: Store
     @Environment(\.openWindow) private var openWindow
     var body: some View {

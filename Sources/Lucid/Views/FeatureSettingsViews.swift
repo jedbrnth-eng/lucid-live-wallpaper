@@ -2,21 +2,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Part of Lucid: https://github.com/jedbrnth-eng/lucid-live-wallpaper
 
-// Settings sections and sheets for Wallpaper Engine sync, audio-reactive looks and Day/Night wallpapers.
+// Settings sections and sheets for audio-reactive looks and Day/Night wallpapers.
 import SwiftUI
 import AppKit
-
-enum WEFolderPicker {
-    @MainActor static func pick(_ we: WELibrary) {
-        let p = NSOpenPanel()
-        p.canChooseDirectories = true
-        p.canChooseFiles = false
-        p.allowsMultipleSelection = true
-        p.prompt = "Link Folder"
-        p.message = "Pick a Wallpaper Engine folder: workshop/content/431960, projects/myprojects, a single item, or a Steam library folder."
-        if p.runModal() == .OK { p.urls.forEach(we.addFolder) }
-    }
-}
 
 private func timeText(_ d: Date?) -> String {
     guard let d else { return "—" }
@@ -25,45 +13,6 @@ private func timeText(_ d: Date?) -> String {
 }
 
 // MARK: - Settings
-
-struct WESettingsSection: View {
-    @EnvironmentObject var we: WELibrary
-    @State private var scenePreviews = Pref.weScenePreviews
-    var body: some View {
-        GroupBox("Wallpaper Engine") {
-            VStack(alignment: .leading, spacing: 8) {
-                ForEach(we.folders, id: \.self) { f in
-                    HStack {
-                        Image(systemName: "folder").foregroundStyle(.secondary)
-                        Text(f).lineLimit(1).truncationMode(.middle).help(f)
-                        Spacer()
-                        Button("Remove") { we.removeFolder(f) }.buttonStyle(.borderless)
-                    }
-                }
-                ForEach(we.autoFolders, id: \.self) { f in
-                    HStack {
-                        Image(systemName: "bolt.horizontal.circle").foregroundStyle(accent)
-                        Text("Found in Steam: " + f).lineLimit(1).truncationMode(.middle).help(f)
-                    }
-                }
-                if we.folders.isEmpty && we.autoFolders.isEmpty {
-                    Text("No folder linked yet. Steam for Mac doesn't download Wallpaper Engine items, so copy yours from your PC and link that folder.")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-                HStack {
-                    Button { WEFolderPicker.pick(we) } label: { Label("Add Folder…", systemImage: "plus") }
-                    Button { we.rescan(announce: true) } label: { Label("Rescan", systemImage: "arrow.clockwise") }.disabled(we.scanning)
-                    Spacer()
-                    Text("\(we.counts.video) video · \(we.counts.web) web · \(we.counts.unsupported) not on Mac").font(.caption).foregroundStyle(.secondary)
-                }
-                Toggle("Allow a scene's animated preview as a stand-in wallpaper (low quality, not the real scene)", isOn: $scenePreviews)
-                    .onChange(of: scenePreviews) { _, v in Pref.weScenePreviews = v }
-                Text("Lucid links to your own files and keeps the list in sync (new, changed and deleted folders). It never copies, uploads or shares them; only thumbnails and WebM-to-HEVC conversions are cached on this Mac. Scenes need Wallpaper Engine's own renderer and Windows apps can't run on a Mac, so they are listed as Unsupported. Lucid is not affiliated with Wallpaper Engine.")
-                    .font(.caption).foregroundStyle(.secondary)
-            }.frame(maxWidth: .infinity, alignment: .leading).padding(6)
-        }
-    }
-}
 
 struct AudioSettingsSection: View {
     @EnvironmentObject var audio: AudioReactive
@@ -85,7 +34,7 @@ struct AudioSettingsSection: View {
                     Text(audio.status.text).font(.caption).foregroundStyle(audio.status == .running ? .primary : .secondary)
                     if audio.status == .running { ProgressView(value: Double(audio.level)).frame(width: 80).tint(accent) }
                 }
-                Text("Uses macOS system-audio capture (never the microphone); macOS asks once for permission. Capture runs only while an audio-reactive wallpaper is on screen and not paused, and stops completely otherwise. Pick looks per display in Displays: pulse on bass, glow with volume, spectrum bars. Wallpaper Engine web wallpapers get the spectrum automatically. Needs macOS 14.2 or later.")
+                Text("Uses macOS system-audio capture (never the microphone); macOS asks once for permission. Capture runs only while an audio-reactive wallpaper is on screen and not paused, and stops completely otherwise. Pick looks per display in Displays: pulse on bass, glow with volume, spectrum bars. Needs macOS 14.2 or later.")
                     .font(.caption).foregroundStyle(.secondary)
             }.frame(maxWidth: .infinity, alignment: .leading).padding(6)
         }
@@ -146,18 +95,17 @@ struct DNTarget: Identifiable {
 struct DayNightSheet: View {
     let target: DNTarget
     @EnvironmentObject var store: Store
-    @EnvironmentObject var we: WELibrary
-    @EnvironmentObject var engine: WallpaperEngine
+    @EnvironmentObject var engine: LucidEngine
     @EnvironmentObject var dayNight: DayNightController
     @Environment(\.dismiss) private var dismiss
     @State private var dayID = ""
     @State private var nightID = ""
 
     private var choices: [WallItem] {
-        store.library.filter(\.isLocalReady) + we.items.filter { $0.weSupport == .video || $0.weSupport == .web }
+        store.library.filter(\.isLocalReady)
     }
     private func label(_ it: WallItem) -> String {
-        it.title + (it.source == .wallpaperEngine ? " · Wallpaper Engine" : "") + (it.kind == .image ? " · photo" : "")
+        it.title + (it.kind == .image ? " · photo" : "")
     }
 
     var body: some View {

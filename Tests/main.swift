@@ -5,7 +5,6 @@
 // Test entry point: ./test.sh [name-filter]
 import Foundation
 
-registerWallpaperEngineImportTests()
 registerAudioTests()
 registerDayNightTests()
 registerModelCompatTests()

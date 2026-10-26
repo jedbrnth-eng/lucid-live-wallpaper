@@ -3,7 +3,7 @@
 // Part of Lucid: https://github.com/jedbrnth-eng/lucid-live-wallpaper
 
 // Audio analyser: turns raw system-audio samples into band levels (bass/mid/treble), an overall level
-// and a 64-band spectrum per channel (the 128-float layout Wallpaper Engine web wallpapers expect).
+// and a 64-band spectrum (per channel, and the max of both).
 // Pure and synchronous (no audio device, no threads), so it is unit-tested with synthetic sine waves.
 import Foundation
 import Accelerate
@@ -15,8 +15,6 @@ struct AudioFrame: Equatable {
     static let silent = AudioFrame(bass: 0, mid: 0, treble: 0, level: 0, spectrum: [], left: [], right: [])
     static let bands = 64
 
-    /// Wallpaper Engine's `wallpaperRegisterAudioListener` layout: 64 left bands (bass→treble), then 64 right bands.
-    var weArray: [Float] { AudioFrame.pad(left) + AudioFrame.pad(right) }
     static func pad(_ a: [Float]) -> [Float] { a.count >= bands ? Array(a.prefix(bands)) : a + [Float](repeating: 0, count: bands - a.count) }
 }
 

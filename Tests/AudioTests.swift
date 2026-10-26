@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Part of Lucid: https://github.com/jedbrnth-eng/lucid-live-wallpaper
 
-// Audio analyser, smoothing, reactive look mapping and the Wallpaper Engine web audio shim.
+// Audio analyser, smoothing and reactive look mapping.
 // Synthetic buffers only: no audio device is touched.
 import Foundation
 
@@ -35,17 +35,17 @@ func registerAudioTests() {
     test("Audio: silence is all zeros") {
         let f = AudioAnalyser(sampleRate: 48_000).analyse(left: [Float](repeating: 0, count: 4096), right: [Float](repeating: 0, count: 4096))
         expectEqual(f.level, 0); expectEqual(f.bass, 0); expectEqual(f.mid, 0); expectEqual(f.treble, 0)
-        expect(f.weArray.allSatisfy { $0 == 0 })
+        expect((f.left + f.right + f.spectrum).allSatisfy { $0 == 0 })
     }
-    test("Audio: Wallpaper Engine array is 128 floats, left then right") {
+    test("Audio: left and right are 64 bands each and stay separate") {
         let f = AudioAnalyser(sampleRate: 48_000).analyse(left: sine(500), right: [Float](repeating: 0, count: 4096))
-        expectEqual(f.weArray.count, 128)
-        expect(f.weArray[0..<64].max()! > 0.5, "left half carries the tone")
-        expect(f.weArray[64..<128].allSatisfy { $0 == 0 }, "right half silent")
+        expectEqual(f.left.count, 64); expectEqual(f.right.count, 64)
+        expect(f.left.max()! > 0.5, "left carries the tone")
+        expect(f.right.allSatisfy { $0 == 0 }, "right silent")
     }
     test("Audio: all values clamped to 0...1 even when overdriven") {
         let f = AudioAnalyser(sampleRate: 48_000).analyse(left: sine(100, amp: 4), right: sine(3000, amp: 4), gain: 8)
-        let all = f.weArray + f.spectrum + [f.bass, f.mid, f.treble, f.level]
+        let all = f.left + f.right + f.spectrum + [f.bass, f.mid, f.treble, f.level]
         expect(all.allSatisfy { $0 >= 0 && $0 <= 1 && $0.isFinite })
     }
     test("Audio: sensitivity (gain) raises quiet signals") {
@@ -57,7 +57,7 @@ func registerAudioTests() {
     test("Audio: short and NaN buffers are safe") {
         let a = AudioAnalyser(sampleRate: 44_100)
         let f = a.analyse(left: [0.5, .nan, -0.5], right: nil)
-        expect((f.weArray + [f.level]).allSatisfy { $0.isFinite && $0 >= 0 && $0 <= 1 })
+        expect((f.left + f.right + f.spectrum + [f.level]).allSatisfy { $0.isFinite && $0 >= 0 && $0 <= 1 })
         expectEqual(a.analyse(left: [], right: nil).spectrum.count, 64)
     }
     test("Audio: deinterleave splits L/R and handles mono") {
@@ -96,23 +96,5 @@ func registerAudioTests() {
         let quiet = ReactiveMapper.look(.silent, options: ReactiveOptions(pulse: true, glow: true, bars: true))
         expectEqual(quiet.scale, 1); expectEqual(quiet.glow, 0)
         expect(!ReactiveOptions().any && ReactiveOptions(bars: true).any)
-    }
-    test("WE shim: defines the audio listener API and passes default properties") {
-        let js = WEShim.bootstrapScript(userPropertiesJSON: #"{"customint":{"value":20}}"#)
-        for name in ["wallpaperRegisterAudioListener", "wallpaperPropertyListener", "applyUserProperties", "applyGeneralProperties",
-                     "wallpaperRegisterMediaStatusListener", "__lucidAudio", "__lucidSetPaused", #"{"customint":{"value":20}}"#] {
-            expect(js.contains(name), "missing \(name)")
-        }
-        expect(!WEShim.bootstrapScript(userPropertiesJSON: "not json </script>").contains("</script>"), "invalid property JSON is dropped")
-    }
-    test("WE shim: audio call is a 128-number array, NaN and range safe") {
-        var a = [Float](repeating: 0.5, count: 128); a[3] = .nan; a[4] = 7; a[5] = -1
-        let call = WEShim.audioCall(a)
-        expect(call.hasPrefix("window.__lucidAudio&&window.__lucidAudio(["), call)
-        let inner = call.drop { $0 != "[" }.dropFirst().prefix { $0 != "]" }
-        let nums = inner.split(separator: ",").compactMap { Double($0) }
-        expectEqual(nums.count, 128)
-        expectEqual(nums[3], 0); expectEqual(nums[4], 1); expectEqual(nums[5], 0)
-        expectEqual(WEShim.audioCall([0.25]).filter { $0 == "," }.count, 127, "short arrays are padded to 128")
     }
 }

@@ -14,7 +14,7 @@ import Security
 import UniformTypeIdentifiers
 import ImageIO
 
-@MainActor final class WallpaperEngine: ObservableObject {
+@MainActor final class LucidEngine: ObservableObject {
     @Published private(set) var state = EngineState()
     @Published private(set) var pauseReason: String?
     @Published private(set) var tick = 0
@@ -34,7 +34,7 @@ import ImageIO
     private(set) var audioNeeded = false
 
     init() {
-        if let d = try? Data(contentsOf: Paths.state), let s = try? JSONDecoder().decode(EngineState.self, from: d) { state = s }
+        if let d = try? Data(contentsOf: Paths.state), let s = SavedData.state(d) { state = s }
         lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
         checkBattery()
         observe()
@@ -151,7 +151,6 @@ import ImageIO
         switch a.kind {
         case .image: targets.forEach { setDesktop(URL(fileURLWithPath: a.path), $0) }
         case .video: Task { if let poster = await Media.poster(a) { targets.forEach { self.setDesktop(poster, $0) } } }
-        case .web: break   // no still frame for web pages; the previous desktop picture stays
         }
     }
     private func updateDesktopPictures() {
@@ -162,10 +161,10 @@ import ImageIO
 
     // MARK: Windows
 
-    /// Video and web always need a window; a still image needs one only for audio-reactive looks or Day/Night cross-fades.
+    /// Video always needs a window; a still image needs one only for audio-reactive looks or Day/Night cross-fades.
     private func needsSurface(_ a: Assignment, _ screen: NSScreen) -> Bool {
         switch a.kind {
-        case .video, .web: return true
+        case .video: return true
         case .image: return (a.reactive?.any ?? false) || rule(for: screen) != nil
         }
     }
@@ -228,7 +227,7 @@ import ImageIO
             let covered = Pref.pauseWhenCovered && !s.visible
             let run = reason == nil && !covered
             s.setRunning(run)
-            if run && ((s.assignment.reactive?.any ?? false) || s.assignment.kind == .web) { needAudio = true }
+            if run && (s.assignment.reactive?.any ?? false) { needAudio = true }
         }
         if needAudio != audioNeeded {
             audioNeeded = needAudio

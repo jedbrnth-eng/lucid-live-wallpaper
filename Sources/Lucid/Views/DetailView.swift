@@ -52,15 +52,6 @@ struct DetailView: View {
                     Text(it.title).font(.title2.bold()).lineLimit(2)
                     Text([it.author, it.category, it.source.label].compactMap { $0 }.joined(separator: " · ")).foregroundStyle(.secondary)
                     if let t = it.tags, !t.isEmpty { Text(t.map { "#\($0)" }.joined(separator: " ")).font(.caption).foregroundStyle(accent.opacity(0.8)) }
-                    if it.source == .wallpaperEngine, let note = it.weNote {
-                        Label(note, systemImage: it.weSupport == .unsupported ? "exclamationmark.triangle" : "checkmark.circle")
-                            .font(.callout).foregroundStyle(it.weSupport == .unsupported ? .orange : .secondary)
-                        if it.weSupport == .unsupported && it.weFallback != nil {
-                            Text(Pref.weScenePreviews ? "“Apply Preview” shows the scene's animated preview as a stand-in. It is not the real scene."
-                                 : "This scene ships an animated preview. You can allow it as a low-quality stand-in in Settings › Wallpaper Engine.")
-                                .font(.caption).foregroundStyle(.secondary)
-                        }
-                    }
                 }
                 Spacer()
                 VStack(alignment: .trailing, spacing: 4) {
@@ -87,12 +78,9 @@ struct DetailView: View {
             }
             if let e = dl.errors[item.id] { Label(e, systemImage: "exclamationmark.triangle").foregroundStyle(.orange) }
             HStack(spacing: 10) {
-                let blocked = it.weSupport == .unsupported && !(it.weFallback != nil && Pref.weScenePreviews)
-                Button { store.setWallpaper(it) } label: {
-                    Label(it.weSupport == .unsupported && !blocked ? "Apply Preview" : "Set as Wallpaper", systemImage: "sparkles.tv")
-                }
+                Button { store.setWallpaper(it) } label: { Label("Set as Wallpaper", systemImage: "sparkles.tv") }
                     .buttonStyle(.borderedProminent).tint(accent.opacity(0.85)).keyboardShortcut(.defaultAction)
-                    .disabled(dl.progress[item.id] != nil || blocked)
+                    .disabled(dl.progress[item.id] != nil)
                 if NSScreen.screens.count > 1 {
                     Menu("Set on Display") {
                         ForEach(NSScreen.screens, id: \.stableKey) { s in
@@ -100,9 +88,7 @@ struct DetailView: View {
                         }
                     }.fixedSize()
                 }
-                if it.source == .wallpaperEngine, let f = it.weFolder {
-                    Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: f)]) }
-                } else if lib == nil && !(it.source == .aerials && it.localPath != nil) {
+                if lib == nil && !(it.source == .aerials && it.localPath != nil) {
                     Button("Download") { store.download(it) }.disabled(dl.progress[item.id] != nil)
                 }
                 Button { store.toggleFavorite(it) } label: {

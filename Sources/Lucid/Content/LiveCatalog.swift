@@ -66,11 +66,3 @@ enum LiveCatalog {
         }
     }
 }
-
-struct Playlist: Codable, Identifiable, Hashable {
-    var id: String = UUID().uuidString
-    var name: String
-    var items: [WallItem] = []
-    var shuffle = true
-    var minutes = 60
-}

@@ -15,7 +15,7 @@ import ImageIO
 
 // MARK: - Models
 
-enum Kind: String, Codable { case video, image, web }   // web = Wallpaper Engine HTML wallpaper
+enum Kind: String, Codable { case video, image }
 
 enum KeyName: String, CaseIterable { case pixabay
     var label: String { "Pixabay" }
@@ -23,7 +23,7 @@ enum KeyName: String, CaseIterable { case pixabay
 }
 
 enum Source: String, Codable, CaseIterable, Identifiable {
-    case aerials, live, pixabayVideo, nasa, wikimedia, local, wallpaperEngine
+    case aerials, live, pixabayVideo, nasa, wikimedia, local
     var id: String { rawValue }
     static let discoverable: [Source] = [.aerials, .live, .pixabayVideo, .nasa, .wikimedia]
 
@@ -35,7 +35,6 @@ enum Source: String, Codable, CaseIterable, Identifiable {
         case .nasa: return "NASA 4K Space"
         case .wikimedia: return "Wikimedia 4K Photos"
         case .local: return "My Files"
-        case .wallpaperEngine: return "Wallpaper Engine"
         }
     }
     var icon: String {
@@ -46,7 +45,6 @@ enum Source: String, Codable, CaseIterable, Identifiable {
         case .nasa: return "moon.stars"
         case .wikimedia: return "building.columns"
         case .local: return "folder"
-        case .wallpaperEngine: return "square.stack.3d.down.right"
         }
     }
     var blurb: String {
@@ -57,7 +55,6 @@ enum Source: String, Codable, CaseIterable, Identifiable {
         case .nasa: return "NASA Image Library — space & Earth photos, only originals ≥3840×2160. Free, no account. Generally public domain."
         case .wikimedia: return "Wikimedia Commons, filtered to ≥3840×2160 landscape images. Free, no account. Per-image license shown."
         case .local: return "Your own files."
-        case .wallpaperEngine: return "Your own Wallpaper Engine items, read from folders you choose. Lucid only links to them and never copies or shares them."
         }
     }
     var needsKey: KeyName? {
@@ -110,14 +107,6 @@ struct WallItem: Codable, Identifiable, Hashable {
     var creditFull: String?
     var lastAppliedAt: Date?
     var tags: [String]?
-    // Wallpaper Engine items (local references only)
-    var weSupport: WESupport?
-    var weNote: String?
-    var weFolder: String?
-    var weMainFile: String?
-    var weFallback: String?
-    var weProps: String?
-    var weNeedsConversion: Bool?
 
     var is4K: Bool { max(width, height) >= 3840 && min(width, height) >= 2160 }
     var resLabel: String {
@@ -137,10 +126,9 @@ struct Assignment: Codable, Equatable {
     var path: String
     var kind: Kind
     var reactive: ReactiveOptions?   // optional audio-reactive look for this wallpaper
-    var webProps: String?            // Wallpaper Engine web wallpapers: default user properties JSON
 
     /// Same media on screen (ignores look options, which are updated in place without reloading).
-    func sameMedia(_ o: Assignment) -> Bool { path == o.path && kind == o.kind && webProps == o.webProps }
+    func sameMedia(_ o: Assignment) -> Bool { path == o.path && kind == o.kind }
 }
 
 /// A Day/Night assignment: one wallpaper between sunrise and sunset, another the rest of the time.
@@ -156,4 +144,74 @@ struct EngineState: Codable {
     var userPaused = false
     var dayNight: [String: DayNightRule]?   // key: display key, or "*" for all displays. Optional so old state.json still decodes.
     static let allKey = "*"
+}
+
+struct Playlist: Codable, Identifiable, Hashable {
+    var id: String = UUID().uuidString
+    var name: String
+    var items: [WallItem] = []
+    var shuffle = true
+    var minutes = 60
+}
+
+// MARK: - Loading saved data (library.json, favorites.json, playlists.json, state.json)
+
+// Saved files can hold entries this version no longer understands (a removed source or kind, e.g. from a
+// development build, or a newer Lucid). Each entry is decoded on its own, so only that entry is dropped.
+
+enum SavedData {
+    static func items(_ d: Data) -> [WallItem] { (try? JSONDecoder().decode(LossyArray<WallItem>.self, from: d))?.values ?? [] }
+    static func playlists(_ d: Data) -> [Playlist] { (try? JSONDecoder().decode(LossyArray<Playlist>.self, from: d))?.values ?? [] }
+    static func state(_ d: Data) -> EngineState? { try? JSONDecoder().decode(EngineState.self, from: d) }
+}
+
+struct LossyArray<T: Decodable>: Decodable {
+    var values: [T]
+    private struct Skip: Decodable { init(from decoder: Decoder) throws {} }
+    init(from decoder: Decoder) throws {
+        var c = try decoder.unkeyedContainer()
+        var out: [T] = []
+        while !c.isAtEnd {
+            if let v = try? c.decode(T.self) { out.append(v) } else { _ = try c.decode(Skip.self) }   // Skip moves past the bad entry
+        }
+        values = out
+    }
+}
+
+struct LossyDictionary<T: Decodable>: Decodable {
+    var values: [String: T]
+    private struct Key: CodingKey {
+        var stringValue: String
+        var intValue: Int? { nil }
+        init?(stringValue: String) { self.stringValue = stringValue }
+        init?(intValue: Int) { return nil }
+    }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: Key.self)
+        var out: [String: T] = [:]
+        for k in c.allKeys { if let v = try? c.decode(T.self, forKey: k) { out[k.stringValue] = v } }
+        values = out
+    }
+}
+
+extension Playlist {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        items = try c.decode(LossyArray<WallItem>.self, forKey: .items).values
+        shuffle = try c.decode(Bool.self, forKey: .shuffle)
+        minutes = try c.decode(Int.self, forKey: .minutes)
+    }
+}
+
+extension EngineState {
+    /// Assignments or Day/Night rules that no longer decode (e.g. a removed wallpaper kind) are dropped; the rest is kept.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        all = (try? c.decodeIfPresent(Assignment.self, forKey: .all)) ?? nil
+        perScreen = ((try? c.decodeIfPresent(LossyDictionary<Assignment>.self, forKey: .perScreen)) ?? nil)?.values ?? [:]
+        userPaused = ((try? c.decodeIfPresent(Bool.self, forKey: .userPaused)) ?? nil) ?? false
+        dayNight = ((try? c.decodeIfPresent(LossyDictionary<DayNightRule>.self, forKey: .dayNight)) ?? nil)?.values
+    }
 }

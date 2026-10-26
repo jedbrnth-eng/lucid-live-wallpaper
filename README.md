@@ -106,7 +106,6 @@ rm -rf /Applications/Lucid.app "$HOME/Library/Application Support/Lucid"
 | **Stills** | NASA 4K Space and Wikimedia 4K Photos, with the license shown on every item. |
 | **Your own library** | Drag in your own videos and photos, or whole folders. Anything below 4K is flagged. |
 | **Every display** | A different wallpaper on each monitor, playlists, favorites, an auto-change timer, and open at login. Switch to a recent wallpaper straight from the menu bar. |
-| **Wallpaper Engine sync** | Link your own Wallpaper Engine folder. Lucid keeps a synced list (new, changed and deleted items) and plays what a Mac can: videos natively and web wallpapers in WebKit. See the support table below. |
 | **Audio reactive** | Optional: wallpapers pulse on the bass, glow with the volume or show spectrum bars, driven by the sound your Mac plays (never the microphone). Off by default. |
 | **Day & Night** | One wallpaper by day, another at night, switching at sunrise and sunset (or at fixed times) with a soft cross-fade. |
 | **Battery-friendly** | Pauses when covered, in Low Power Mode, on battery, when the screen locks or the display sleeps. |
@@ -128,25 +127,9 @@ Three ways, pick whichever is easiest:
 
 MP4 and MOV work as they are. WebM, MKV and similar formats are converted to HEVC automatically. Your files show up under **Downloaded → My Files**.
 
-## Wallpaper Engine
-
-[Wallpaper Engine](https://store.steampowered.com/app/431960/) is a Windows app, and Steam for Mac does not download its Workshop items. If you own items, copy the folders from your PC (`steamapps/workshop/content/431960` or `wallpaper_engine/projects/myprojects`) to your Mac, then open **Wallpaper Engine** in the sidebar (or **Settings → Wallpaper Engine**) and click **Add Folder…**. You can pick that folder, a single item, or a whole Steam library. Lucid also checks Steam's Mac folders in case items ever appear there. It never signs in to Steam.
-
-Lucid reads each item's `project.json`, watches the folders for changes, and removes items whose folder disappears.
-
-| Wallpaper Engine type | On Lucid |
-|---|---|
-| **Video** (MP4, MOV) | Plays natively, straight from your folder. |
-| **Video** (WebM, MKV and others) | Converted once to HEVC (needs `ffmpeg`), cached in `~/Library/Application Support/Lucid/WallpaperEngine`, then plays natively. |
-| **Web** (HTML) | Runs in a WebKit window, best effort. Lucid provides `wallpaperRegisterAudioListener` (128 values, as Wallpaper Engine sends them) and `wallpaperPropertyListener` with the item's default settings. Pages are muted. Not supported yet: changing an item's user properties, the media-integration listeners, mouse interaction and pages that need Windows-only features. |
-| **Scene** (`.pkg`) | **Not playable on Mac.** Scenes need Wallpaper Engine's own renderer. They are listed as *Unsupported on Mac* with their preview. If you turn it on in Settings, a scene's animated preview can be used as a clearly labelled, low-quality stand-in. See [`docs/wallpaper-engine-scene-feasibility.md`](docs/wallpaper-engine-scene-feasibility.md). |
-| **Application** (`.exe`) | **Not playable on Mac.** These are Windows programs. Listed as *Unsupported on Mac*. |
-
-Your Wallpaper Engine items stay where they are. Lucid only links to your own files on your own Mac, for your personal use. It never copies, uploads or redistributes them (only thumbnails and the HEVC conversions above are cached locally). The items belong to their creators. Lucid is not affiliated with Wallpaper Engine or Valve.
-
 ## Audio reactive
 
-Turn on **Settings → Audio reactive**, then pick looks per display in **Displays → Audio**: *Pulse on bass*, *Glow with volume*, *Spectrum bars*. These work on any wallpaper, videos and photos included, and Wallpaper Engine web wallpapers get the audio spectrum automatically.
+Turn on **Settings → Audio reactive**, then pick looks per display in **Displays → Audio**: *Pulse on bass*, *Glow with volume*, *Spectrum bars*. These work on any wallpaper, videos and photos included.
 
 - Lucid listens to the sound your Mac **plays**, using macOS system-audio capture (a Core Audio tap). It never uses the microphone. macOS asks once for permission (*System Audio Recording*).
 - Sound is analysed on your Mac (an FFT into bass, mid and treble plus 64 bands per channel) and is never recorded or sent anywhere.
@@ -177,7 +160,7 @@ Loops are modified (cross-faded, re-encoded) copies for **personal use on your o
 
 ## How it works
 
-Each display gets a borderless window at desktop level, above the system wallpaper and below the desktop icons, holding a muted, hardware-decoded looping `AVQueuePlayer` (or a WebKit view for Wallpaper Engine web wallpapers, or a still image when an audio-reactive look or a Day/Night pair needs one). Changing wallpaper cross-fades the new window over the old one, then releases the old player. A frame from the video is also set as the real desktop picture, so Mission Control and other Spaces show a matching still.
+Each display gets a borderless window at desktop level, above the system wallpaper and below the desktop icons, holding a muted, hardware-decoded looping `AVQueuePlayer` (or a still image when an audio-reactive look or a Day/Night pair needs one). Changing wallpaper cross-fades the new window over the old one, then releases the old player. A frame from the video is also set as the real desktop picture, so Mission Control and other Spaces show a matching still.
 Data lives in `~/Library/Application Support/Lucid/`.
 
 ## Project layout
@@ -192,9 +175,8 @@ Sources/Lucid/
 ├── Engine/     per-display wallpaper windows and the downloader
 ├── Media/      transcoding and seamless loop maker
 ├── Store/      app state shared by the views
-├── Views/      SwiftUI screens and components
-└── WEImport/   Wallpaper Engine folder scanner, sync and web API shim
-Tests/          unit tests (./test.sh) and Wallpaper Engine fixtures
+└── Views/      SwiftUI screens and components
+Tests/          unit tests (./test.sh) and saved-data fixtures
 tools/          catalog builder and its tests
 ```
 
@@ -205,7 +187,7 @@ No analytics or telemetry. Audio-reactive analysis and your location (if you tur
 ## Test
 
 ```
-./test.sh                                          # unit tests: Wallpaper Engine import, audio analyser, sunrise/sunset (offline)
+./test.sh                                          # unit tests: audio analyser, sunrise/sunset, saved-data compatibility (offline)
 ./selftest.sh                                      # every source returns only ≥3840×2160 items
 python3 -m unittest tools/test_build_catalog.py    # offline catalog-builder tests
 python3 tools/build_catalog.py catalog.json        # rebuild the Live 4K catalog (slow)
@@ -214,8 +196,6 @@ python3 tools/build_catalog.py catalog.json        # rebuild the Live 4K catalog
 ## Credits
 
 - Sunrise and sunset: NOAA Global Monitoring Laboratory's solar calculator equations (public domain).
-- Wallpaper Engine support follows the public [designer documentation](https://docs.wallpaperengine.io/) for `project.json` and the web wallpaper API. No Wallpaper Engine code is used.
-- Thanks to [linux-wallpaperengine](https://github.com/Almamu/linux-wallpaperengine) (GPL-3.0) by Almamu and contributors, which we studied while assessing scene support. No code from it is included in Lucid.
 
 ## Contributing
 

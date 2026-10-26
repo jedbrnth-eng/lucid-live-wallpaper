@@ -1,0 +1,71 @@
+{
+ "all": {
+  "itemID": "we:861750235",
+  "title": "Web Clock",
+  "path": "/tmp/we/861750235/index.html",
+  "kind": "web",
+  "webProps": "{}"
+ },
+ "perScreen": {
+  "A": {
+   "itemID": "local:x",
+   "title": "Neon",
+   "path": "/tmp/neon.mp4",
+   "kind": "video",
+   "reactive": {
+    "pulse": true,
+    "glow": false,
+    "bars": false
+   }
+  },
+  "B": {
+   "itemID": "we:861750235",
+   "title": "Web Clock",
+   "path": "/tmp/we/861750235/index.html",
+   "kind": "web",
+   "webProps": "{}"
+  }
+ },
+ "userPaused": true,
+ "dayNight": {
+  "*": {
+   "day": {
+    "itemID": "local:x",
+    "title": "Neon",
+    "path": "/tmp/neon.mp4",
+    "kind": "video",
+    "reactive": {
+     "pulse": true,
+     "glow": false,
+     "bars": false
+    }
+   },
+   "night": {
+    "itemID": "we:861750235",
+    "title": "Web Clock",
+    "path": "/tmp/we/861750235/index.html",
+    "kind": "web",
+    "webProps": "{}"
+   }
+  },
+  "A": {
+   "day": {
+    "itemID": "nasa:1",
+    "title": "Earth",
+    "path": "/tmp/earth.jpg",
+    "kind": "image"
+   },
+   "night": {
+    "itemID": "local:x",
+    "title": "Neon",
+    "path": "/tmp/neon.mp4",
+    "kind": "video",
+    "reactive": {
+     "pulse": true,
+     "glow": false,
+     "bars": false
+    }
+   }
+  }
+ }
+}

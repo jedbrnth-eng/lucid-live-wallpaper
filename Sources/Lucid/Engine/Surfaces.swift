@@ -2,13 +2,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Part of Lucid: https://github.com/jedbrnth-eng/lucid-live-wallpaper
 
-// What sits in each desktop window: a looping video, a still image, or a Wallpaper Engine web page,
+// What sits in each desktop window: a looping video or a still image,
 // plus the optional audio-reactive look layers (pulse, glow, spectrum bars) and the dim layer.
 import SwiftUI
 import AppKit
 import AVKit
 import AVFoundation
-import WebKit
 import ImageIO
 
 // MARK: - Screens
@@ -128,9 +127,6 @@ final class SurfaceHostView: NSView {
     private(set) var host: SurfaceHostView?
     private(set) var player: AVQueuePlayer?
     private var looper: AVPlayerLooper?
-    private(set) var web: WKWebView?
-    private var webDim: NSView?
-    private var webRunning: Bool?
     var visible = true
     var occlusionObserver: NSObjectProtocol?
 
@@ -158,18 +154,6 @@ final class SurfaceHostView: NSView {
             l.contents = Self.loadImage(assignment.path, maxPixels: maxPixels)
             host = SurfaceHostView(content: l)
             window.contentView = host
-        case .web:
-            let container = NSView(frame: CGRect(origin: .zero, size: screen.frame.size))
-            container.autoresizingMask = [.width, .height]
-            let wv = Self.makeWebView(assignment, frame: container.bounds)
-            container.addSubview(wv)
-            let dim = NSView(frame: container.bounds)
-            dim.autoresizingMask = [.width, .height]
-            dim.wantsLayer = true
-            dim.layer?.backgroundColor = NSColor.black.cgColor
-            container.addSubview(dim)
-            web = wv; webDim = dim
-            window.contentView = container
         }
         applyLook()
         window.orderFrontRegardless()
@@ -177,7 +161,6 @@ final class SurfaceHostView: NSView {
 
     var isRunning: Bool {
         if let p = player { return p.rate > 0 }
-        if web != nil { return webRunning ?? false }
         return true
     }
 
@@ -186,20 +169,6 @@ final class SurfaceHostView: NSView {
         return CGImageSourceCreateThumbnailAtIndex(src, 0, [kCGImageSourceCreateThumbnailFromImageAlways: true,
                                                             kCGImageSourceThumbnailMaxPixelSize: max(640, maxPixels),
                                                             kCGImageSourceCreateThumbnailWithTransform: true] as CFDictionary)
-    }
-
-    private static func makeWebView(_ a: Assignment, frame: CGRect) -> WKWebView {
-        let cfg = WKWebViewConfiguration()
-        cfg.mediaTypesRequiringUserActionForPlayback = []
-        cfg.preferences.setValue(true, forKey: "allowFileAccessFromFileURLs")   // many WE pages load local JSON/images via XHR
-        cfg.userContentController.addUserScript(WKUserScript(source: WEShim.bootstrapScript(userPropertiesJSON: a.webProps),
-                                                             injectionTime: .atDocumentStart, forMainFrameOnly: true))
-        let wv = WKWebView(frame: frame, configuration: cfg)
-        wv.autoresizingMask = [.width, .height]
-        wv.underPageBackgroundColor = .black
-        let index = URL(fileURLWithPath: a.path)
-        wv.loadFileURL(index, allowingReadAccessTo: index.deletingLastPathComponent())
-        return wv
     }
 
     func move(to screen: NSScreen) {
@@ -215,7 +184,6 @@ final class SurfaceHostView: NSView {
     func applyLook() {
         host?.applyLook()
         player?.defaultRate = Float(Pref.speed)
-        webDim?.layer?.opacity = Float(min(0.8, max(0, Pref.dim)))
     }
 
     func setRunning(_ run: Bool) {
@@ -223,16 +191,10 @@ final class SurfaceHostView: NSView {
             let r = Float(Pref.speed)
             if run { if p.rate != r { p.defaultRate = r; p.rate = r } } else if p.rate != 0 { p.pause() }
         }
-        if let wv = web, webRunning != run {
-            webRunning = run
-            wv.setAllMediaPlaybackSuspended(!run)
-            wv.evaluateJavaScript("window.__lucidSetPaused&&window.__lucidSetPaused(\(!run))", completionHandler: nil)
-        }
     }
 
     func deliver(_ frame: AudioFrame) {
         if let o = assignment.reactive, o.any { host?.applyReactive(ReactiveMapper.look(frame, options: o)) }
-        if let wv = web, webRunning == true { wv.evaluateJavaScript(WEShim.audioCall(frame.weArray), completionHandler: nil) }
     }
 
     func resetReactive() { host?.applyReactive(ReactiveLook()) }
@@ -244,12 +206,6 @@ final class SurfaceHostView: NSView {
         looper = nil
         player?.removeAllItems()
         player = nil
-        if let wv = web {
-            wv.stopLoading()
-            wv.configuration.userContentController.removeAllUserScripts()
-            wv.removeFromSuperview()
-        }
-        web = nil
         window.orderOut(nil)
         window.contentView = nil
         host = nil

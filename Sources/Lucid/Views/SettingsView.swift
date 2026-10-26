@@ -15,7 +15,7 @@ import ImageIO
 
 struct SettingsView: View {
     @EnvironmentObject var store: Store
-    @EnvironmentObject var engine: WallpaperEngine
+    @EnvironmentObject var engine: LucidEngine
     @State private var battery = Pref.pauseOnBattery
     @State private var lowPower = Pref.pauseLowPower
     @State private var covered = Pref.pauseWhenCovered
@@ -53,7 +53,6 @@ struct SettingsView: View {
             }
             AudioSettingsSection()
             DayNightSettingsSection()
-            WESettingsSection()
             GroupBox("Adding wallpapers") {
                 VStack(alignment: .leading, spacing: 8) {
                     Toggle("Auto-add 4K videos and photos I download to ~/Downloads", isOn: $watch)

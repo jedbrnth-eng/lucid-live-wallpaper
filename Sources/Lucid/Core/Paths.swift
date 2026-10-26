@@ -23,8 +23,6 @@ enum Paths {
     static let media = make(support.appendingPathComponent("Media", isDirectory: true))
     static let incoming = make(support.appendingPathComponent("Incoming", isDirectory: true))
     static let thumbs = make(support.appendingPathComponent("Thumbs", isDirectory: true))
-    static let weCache = make(support.appendingPathComponent("WallpaperEngine", isDirectory: true))   // converted WE videos
-    static let weIndex = support.appendingPathComponent("wallpaper-engine.json")
     static let library = support.appendingPathComponent("library.json")
     static let state = support.appendingPathComponent("state.json")
     static let status = support.appendingPathComponent("status.json")

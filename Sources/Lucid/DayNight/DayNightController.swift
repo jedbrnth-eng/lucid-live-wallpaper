@@ -13,14 +13,14 @@ import CoreLocation
     @Published private(set) var phase: DayPhase = .day
     @Published private(set) var nextChange: Date?
     @Published private(set) var sourceText = ""
-    private weak var engine: WallpaperEngine?
+    private weak var engine: LucidEngine?
     private var timer: Timer?
     private var safety: Timer?
     private var observers: [NSObjectProtocol] = []
     private var location: CLLocationManager?
     var now: () -> Date = Date.init
 
-    init(engine: WallpaperEngine) {
+    init(engine: LucidEngine) {
         self.engine = engine
         super.init()
         engine.phase = { [weak self] in self?.phase ?? .day }

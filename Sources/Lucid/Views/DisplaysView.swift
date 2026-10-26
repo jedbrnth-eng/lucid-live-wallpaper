@@ -14,7 +14,7 @@ import UniformTypeIdentifiers
 import ImageIO
 
 struct DisplaysView: View {
-    @EnvironmentObject var engine: WallpaperEngine
+    @EnvironmentObject var engine: LucidEngine
     @EnvironmentObject var store: Store
     @EnvironmentObject var audio: AudioReactive
     @EnvironmentObject var dayNight: DayNightController

@@ -28,10 +28,6 @@ enum Pref {
     static var watchDownloads: Bool { get { d.bool(forKey: "watchDownloads") } set { d.set(newValue, forKey: "watchDownloads") } }
     static var activePlaylist: String? { get { d.string(forKey: "activePlaylist") } set { d.set(newValue, forKey: "activePlaylist") } }
 
-    // Wallpaper Engine library (plain paths: Lucid is not sandboxed, so no security-scoped bookmarks are needed)
-    static var weFolders: [String] { get { d.stringArray(forKey: "weFolders") ?? [] } set { d.set(newValue, forKey: "weFolders") } }
-    static var weScenePreviews: Bool { get { d.bool(forKey: "weScenePreviews") } set { d.set(newValue, forKey: "weScenePreviews") } }
-
     // Audio reactive (off by default)
     static var audioReactive: Bool { get { d.bool(forKey: "audioReactive") } set { d.set(newValue, forKey: "audioReactive") } }
     static var audioSensitivity: Double { get { d.object(forKey: "audioSensitivity") as? Double ?? 1.0 } set { d.set(newValue, forKey: "audioSensitivity") } }

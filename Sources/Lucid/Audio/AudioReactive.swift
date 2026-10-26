@@ -3,7 +3,7 @@
 // Part of Lucid: https://github.com/jedbrnth-eng/lucid-live-wallpaper
 
 // Turns system-audio capture on only while it is useful: the Settings toggle is on AND a visible, playing
-// wallpaper reacts to sound (an "Audio reactive" look or a Wallpaper Engine web page). Otherwise capture is
+// wallpaper reacts to sound (it has an "Audio reactive" look). Otherwise capture is
 // fully stopped, following the same pause rules as video (locked, asleep, battery, Low Power, covered).
 import Foundation
 import SwiftUI
@@ -30,7 +30,7 @@ import SwiftUI
 
     @Published private(set) var status: Status = .off
     @Published private(set) var level: Float = 0
-    private weak var engine: WallpaperEngine?
+    private weak var engine: LucidEngine?
     private var tap: AnyObject?
     private var timer: Timer?
     private var analyser: AudioAnalyser?
@@ -39,7 +39,7 @@ import SwiftUI
     private var needed = false
     static let fps = 30.0
 
-    init(engine: WallpaperEngine) {
+    init(engine: LucidEngine) {
         self.engine = engine
         engine.onAudioNeedChanged = { [weak self] n in self?.setNeeded(n) }
         needed = engine.audioNeeded
