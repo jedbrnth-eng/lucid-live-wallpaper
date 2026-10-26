@@ -37,10 +37,6 @@ struct SettingsView: View {
     @ObservedObject private var updater = UpdateChecker.shared
 
     var body: some View {
-        ScrollView { content.padding(.trailing, 12) }.frame(minHeight: 520, idealHeight: 760)
-    }
-
-    private var content: some View {
         VStack(alignment: .leading, spacing: 22) {
             Header(title: "Settings", subtitle: "Playback, power saving and content sources.")
             GroupBox("Look") {

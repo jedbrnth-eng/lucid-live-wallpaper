@@ -91,6 +91,7 @@ import AppKit
             r["windows_after_clear"] = engine.surfaces.count
         }
         await importChecks(store, &r)
+        renderViews(store, &r)
         await weatherChecks(store, &r)
         // 6. Global shortcuts (dev bundle's own defaults): enable, check all three registered, a second claim of the
         //    same combination is refused by macOS, then turn them off again.
@@ -228,6 +229,27 @@ import AppKit
         e.setWeather(WeatherRule(map: [:]), screenKey: nil)
         e.clear(screenKey: nil)
         await wait(0.3)
+    }
+
+    /// 8. Render every screen of the app off-screen with the shared environment, so a view that reads an
+    ///    environment object nobody provides crashes here (in the check) instead of in front of a user.
+    private static func renderViews(_ store: Store, _ r: inout [String: Any]) {
+        func render<V: View>(_ name: String, _ v: V) -> String {
+            let host = NSHostingView(rootView: v.lucidEnvironment(store).frame(width: 1100, height: 800))
+            host.frame = NSRect(x: 0, y: 0, width: 1100, height: 800)
+            host.layoutSubtreeIfNeeded()
+            _ = host.fittingSize
+            return "rendered"
+        }
+        r["render_settings"] = render("settings", ScrollView { SettingsView() })
+        r["render_displays"] = render("displays", DisplaysView())
+        r["render_menu"] = render("menu", VStack { MenuContent() })
+        r["render_library"] = render("library", LibraryView(mode: .downloaded))
+        if let it = store.library.first { r["render_detail"] = render("detail", DetailView(item: it)) }
+        if let w = NSScreen.screens.first {
+            r["render_weather_sheet"] = render("weather", WeatherSheet(target: DNTarget(screenKey: nil, name: w.localizedName)))
+            r["render_daynight_sheet"] = render("daynight", DayNightSheet(target: DNTarget(screenKey: nil, name: w.localizedName)))
+        }
     }
 
     private static func finish(_ r: [String: Any]) {

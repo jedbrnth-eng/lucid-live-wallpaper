@@ -85,24 +85,33 @@ struct LucidApp: App {
 
     var body: some Scene {
         Window("Lucid", id: "main") {
-            ContentView()
-                .environmentObject(store).environmentObject(store.engine).environmentObject(store.downloader)
-                .environmentObject(store.audio).environmentObject(store.dayNight).environmentObject(store.weather)
+            ContentView().lucidEnvironment(store)
                 .frame(minWidth: 1020, minHeight: 660)
                 .preferredColorScheme(.dark)
         }
         .defaultSize(width: 1240, height: 800)
         Settings {
-            SettingsView().environmentObject(store).environmentObject(store.engine).environmentObject(HotkeyCenter.shared)
-                .environmentObject(store.audio).environmentObject(store.dayNight).environmentObject(store.weather)
-                .frame(width: 560).padding(20).preferredColorScheme(.dark)
+            ScrollView {
+                SettingsView().frame(width: 560).padding(20)
+            }
+            .frame(minHeight: 480, idealHeight: 760)
+            .lucidEnvironment(store)
+            .preferredColorScheme(.dark)
         }
         MenuBarExtra("Lucid", systemImage: "sparkles.tv") {
-            MenuContent().environmentObject(store).environmentObject(store.engine).environmentObject(store.audio).environmentObject(HotkeyCenter.shared)
+            MenuContent().lucidEnvironment(store)
         }
     }
 }
 
+extension View {
+    /// Every shared object any Lucid view may read. One list for all windows (a missing one crashes SwiftUI at runtime).
+    @MainActor func lucidEnvironment(_ store: Store) -> some View {
+        environmentObject(store).environmentObject(store.engine).environmentObject(store.downloader)
+            .environmentObject(store.audio).environmentObject(store.dayNight).environmentObject(store.weather)
+            .environmentObject(HotkeyCenter.shared)
+    }
+}
 
 // MARK: - Import helpers
 
