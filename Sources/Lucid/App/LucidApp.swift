@@ -21,8 +21,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
     func applicationDidFinishLaunching(_ n: Notification) {
         MainActor.assumeIsolated {
+            if UserDefaults.standard.bool(forKey: "lucidCheck") { WallpaperEngine.setsDesktopPicture = false }
             let store = Store.shared
             store.engine.refresh()
+            if UserDefaults.standard.bool(forKey: "lucidCheck") { Task { @MainActor in await DevCheck.run(store) }; return }
             store.startDownloadsWatcher()
             let args = UserDefaults.standard
             if args.bool(forKey: "selftest") {
@@ -76,16 +78,18 @@ struct LucidApp: App {
         Window("Lucid", id: "main") {
             ContentView()
                 .environmentObject(store).environmentObject(store.engine).environmentObject(store.downloader)
+                .environmentObject(store.we).environmentObject(store.audio).environmentObject(store.dayNight)
                 .frame(minWidth: 1020, minHeight: 660)
                 .preferredColorScheme(.dark)
         }
         .defaultSize(width: 1240, height: 800)
         Settings {
             SettingsView().environmentObject(store).environmentObject(store.engine)
+                .environmentObject(store.we).environmentObject(store.audio).environmentObject(store.dayNight)
                 .frame(width: 560).padding(20).preferredColorScheme(.dark)
         }
         MenuBarExtra("Lucid", systemImage: "sparkles.tv") {
-            MenuContent().environmentObject(store).environmentObject(store.engine)
+            MenuContent().environmentObject(store).environmentObject(store.engine).environmentObject(store.audio)
         }
     }
 }

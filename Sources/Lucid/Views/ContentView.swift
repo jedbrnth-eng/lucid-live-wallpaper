@@ -15,7 +15,7 @@ import ImageIO
 
 // MARK: - Views
 
-enum Nav: Hashable { case discover(Source), library(LibFilter), favorites, recents, playlist(String), displays, settings }
+enum Nav: Hashable { case discover(Source), library(LibFilter), favorites, recents, wallpaperEngine, playlist(String), displays, settings }
 
 let accent = Color(red: 0.0, green: 0.94, blue: 1.0)
 let accent2 = Color(red: 1.0, green: 0.17, blue: 0.84)
@@ -23,6 +23,7 @@ let accent2 = Color(red: 1.0, green: 0.17, blue: 0.84)
 struct ContentView: View {
     @EnvironmentObject var store: Store
     @EnvironmentObject var engine: WallpaperEngine
+    @EnvironmentObject var we: WELibrary
     @State private var nav: Nav? = .discover(.aerials)
     @State private var newPlaylist = false
     @State private var newName = ""
@@ -40,6 +41,7 @@ struct ContentView: View {
                     Label("Downloaded", systemImage: "square.grid.2x2").badge(store.library.filter(\.isLocalReady).count).tag(Nav.library(.all))
                     Label("Favorites", systemImage: "heart").badge(store.favorites.count).tag(Nav.favorites)
                     Label("Recently Used", systemImage: "clock.arrow.circlepath").tag(Nav.recents)
+                    Label("Wallpaper Engine", systemImage: Source.wallpaperEngine.icon).badge(we.items.count).tag(Nav.wallpaperEngine)
                 }
                 Section {
                     ForEach(store.playlists) { pl in
@@ -68,6 +70,7 @@ struct ContentView: View {
                 case .library: AnyView(LibraryView(mode: .downloaded))
                 case .favorites: AnyView(LibraryView(mode: .favorites))
                 case .recents: AnyView(LibraryView(mode: .recents))
+                case .wallpaperEngine: AnyView(LibraryView(mode: .wallpaperEngine))
                 case .playlist(let id): AnyView(PlaylistView(id: id).id(id))
                 case .displays: AnyView(DisplaysView())
                 case .settings: AnyView(ScrollView { SettingsView().padding(24).frame(maxWidth: 640, alignment: .leading) })
@@ -103,7 +106,7 @@ struct NowPlayingBar: View {
     @EnvironmentObject var engine: WallpaperEngine
     @EnvironmentObject var store: Store
     var body: some View {
-        let title = engine.state.all?.title ?? engine.state.perScreen.values.first?.title
+        let title = engine.currentAssignments.first?.title
         VStack(alignment: .leading, spacing: 6) {
             Text("NOW ON DESKTOP").font(.caption2.weight(.bold)).foregroundStyle(.secondary)
             Text(title ?? "Nothing set yet").font(.callout.weight(.semibold)).lineLimit(1)

@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Part of Lucid: https://github.com/jedbrnth-eng/lucid-live-wallpaper
 
-// One borderless desktop-level window with a looping player per display.
+// One borderless desktop-level window per display (see Surfaces.swift), with what each display shows
+// resolved from plain assignments and Day/Night rules. Changes cross-fade; old players are released.
 import SwiftUI
 import AppKit
 import AVKit
@@ -13,111 +14,24 @@ import Security
 import UniformTypeIdentifiers
 import ImageIO
 
-// MARK: - Screens
-
-extension NSScreen {
-    var displayID: CGDirectDisplayID { (deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value ?? 0 }
-    var stableKey: String {
-        if let u = CGDisplayCreateUUIDFromDisplayID(displayID)?.takeRetainedValue() { return CFUUIDCreateString(nil, u) as String }
-        return "display-\(displayID)"
-    }
-    var pixelSize: String { "\(Int(frame.width * backingScaleFactor))×\(Int(frame.height * backingScaleFactor))" }
-}
-
-// MARK: - Wallpaper engine (one borderless desktop-level window + looping AVPlayer per display)
-
-final class WallpaperWindow: NSWindow {
-    init(screen: NSScreen) {
-        super.init(contentRect: screen.frame, styleMask: [.borderless], backing: .buffered, defer: false)
-        level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopWindow)))
-        collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
-        isOpaque = true
-        backgroundColor = .black
-        hasShadow = false
-        ignoresMouseEvents = true
-        canHide = false  // keep playing when the user hides Lucid (⌘H)
-        isReleasedWhenClosed = false
-        animationBehavior = .none
-        title = "Lucid Desktop"
-        setFrame(screen.frame, display: false)
-    }
-    override var canBecomeKey: Bool { false }
-    override var canBecomeMain: Bool { false }
-}
-
-final class PlayerHostView: NSView {
-    let playerLayer = AVPlayerLayer()
-    let dimLayer = CALayer()
-    init(player: AVPlayer) {
-        super.init(frame: .zero)
-        wantsLayer = true
-        layer = CALayer()
-        layer?.backgroundColor = NSColor.black.cgColor
-        playerLayer.player = player
-        playerLayer.videoGravity = .resizeAspectFill
-        playerLayer.autoresizingMask = [.layerWidthSizable, .layerHeightSizable]
-        layer?.addSublayer(playerLayer)
-        dimLayer.backgroundColor = NSColor.black.cgColor
-        dimLayer.autoresizingMask = [.layerWidthSizable, .layerHeightSizable]
-        layer?.addSublayer(dimLayer)
-        applyLook()
-    }
-    required init?(coder: NSCoder) { fatalError() }
-    override func layout() { super.layout(); playerLayer.frame = bounds; dimLayer.frame = bounds }
-    func applyLook() {
-        CATransaction.begin(); CATransaction.setDisableActions(true)
-        playerLayer.videoGravity = Pref.fillScreen ? .resizeAspectFill : .resizeAspect
-        dimLayer.opacity = Float(min(0.8, max(0, Pref.dim)))
-        CATransaction.commit()
-    }
-}
-
-@MainActor final class ScreenPlayer {
-    let key: String
-    let assignment: Assignment
-    let window: WallpaperWindow
-    let player = AVQueuePlayer()
-    private var looper: AVPlayerLooper?
-    private(set) var host: PlayerHostView!
-    var visible = true
-
-    init(screen: NSScreen, key: String, assignment: Assignment) {
-        self.key = key
-        self.assignment = assignment
-        window = WallpaperWindow(screen: screen)
-        player.isMuted = true
-        player.preventsDisplaySleepDuringVideoPlayback = false
-        player.automaticallyWaitsToMinimizeStalling = false
-        let item = AVPlayerItem(url: URL(fileURLWithPath: assignment.path))
-        item.preferredForwardBufferDuration = 2
-        looper = AVPlayerLooper(player: player, templateItem: item)
-        player.defaultRate = Float(Pref.speed)
-        host = PlayerHostView(player: player)
-        window.contentView = host
-        window.orderFrontRegardless()
-    }
-    func move(to screen: NSScreen) {
-        if window.frame != screen.frame { window.setFrame(screen.frame, display: true) }
-    }
-    func close() {
-        player.pause()
-        looper?.disableLooping()
-        looper = nil
-        player.removeAllItems()
-        window.orderOut(nil)
-        window.contentView = nil
-        window.close()
-    }
-}
-
 @MainActor final class WallpaperEngine: ObservableObject {
     @Published private(set) var state = EngineState()
     @Published private(set) var pauseReason: String?
     @Published private(set) var tick = 0
-    private(set) var players: [String: ScreenPlayer] = [:]
+    private(set) var surfaces: [String: ScreenSurface] = [:]
+    private var fading: [ScreenSurface] = []
     private var locked = false, asleep = false, onBattery = false, lowPower = false
     private var timers: [Timer] = []
     private var observers: [NSObjectProtocol] = []
+    static let crossfade: TimeInterval = 1.2
+    /// Off only in the headless dev check, so it never changes your real desktop picture.
+    static var setsDesktopPicture = true
+
+    /// Current day/night phase (set by DayNightController).
+    var phase: () -> DayPhase = { .day }
+    /// Called when audio capture becomes needed / not needed (some running wallpaper reacts to sound).
+    var onAudioNeedChanged: ((Bool) -> Void)?
+    private(set) var audioNeeded = false
 
     init() {
         if let d = try? Data(contentsOf: Paths.state), let s = try? JSONDecoder().decode(EngineState.self, from: d) { state = s }
@@ -126,10 +40,27 @@ final class PlayerHostView: NSView {
         observe()
     }
 
-    func assignment(for screen: NSScreen) -> Assignment? { state.perScreen[screen.stableKey] ?? state.all }
-    func isPlaying(_ screen: NSScreen) -> Bool { (players[screen.stableKey]?.player.rate ?? 0) > 0 }
+    // MARK: Resolving what each display shows
+
+    /// The Day/Night rule governing a display, and its scope key (display key or "*").
+    func rule(for screen: NSScreen) -> (rule: DayNightRule, scope: String)? {
+        let k = screen.stableKey
+        if let r = state.dayNight?[k] { return (r, k) }
+        if state.perScreen[k] != nil { return nil }
+        if let r = state.dayNight?[EngineState.allKey] { return (r, EngineState.allKey) }
+        return nil
+    }
+    var hasDayNightRules: Bool { !(state.dayNight ?? [:]).isEmpty }
+
+    func assignment(for screen: NSScreen) -> Assignment? {
+        if let r = rule(for: screen) { return r.rule.pick(phase()) }
+        return state.perScreen[screen.stableKey] ?? state.all
+    }
+    var currentAssignments: [Assignment] { NSScreen.screens.compactMap(assignment(for:)) }
+
+    func isPlaying(_ screen: NSScreen) -> Bool { surfaces[screen.stableKey]?.isRunning ?? false }
     func screenPaused(_ screen: NSScreen) -> String? {
-        guard let p = players[screen.stableKey] else { return nil }
+        guard let p = surfaces[screen.stableKey] else { return nil }
         if let r = pauseReason { return r }
         if Pref.pauseWhenCovered && !p.visible { return "Covered by a window/full-screen app" }
         return nil
@@ -137,71 +68,151 @@ final class PlayerHostView: NSView {
 
     private func save() { if let d = try? JSONEncoder().encode(state) { try? d.write(to: Paths.state, options: .atomic) } }
 
+    // MARK: Changing assignments
+
     func apply(_ a: Assignment, screenKey: String?) {
-        if let k = screenKey { state.perScreen[k] = a } else { state.all = a; state.perScreen = [:] }
+        if let k = screenKey { state.perScreen[k] = a; state.dayNight?[k] = nil }
+        else { state.all = a; state.perScreen = [:]; state.dayNight = nil }
         state.userPaused = false
         save()
         refresh()
-        let targets = NSScreen.screens.filter { screenKey == nil || $0.stableKey == screenKey }
-        if a.kind == .image {
-            targets.forEach { setDesktop(URL(fileURLWithPath: a.path), $0) }
-        } else {
-            Task { if let poster = await Media.poster(a) { targets.forEach { self.setDesktop(poster, $0) } } }
-        }
+        setDesktopPicture(a, NSScreen.screens.filter { screenKey == nil || $0.stableKey == screenKey })
+    }
+
+    func applyDayNight(_ r: DayNightRule, screenKey: String?) {
+        if let k = screenKey { state.perScreen[k] = nil; state.dayNight = (state.dayNight ?? [:]).merging([k: r]) { $1 } }
+        else { state.all = nil; state.perScreen = [:]; state.dayNight = [EngineState.allKey: r] }
+        state.userPaused = false
+        save()
+        refresh()
+        updateDesktopPictures()
     }
 
     func clear(screenKey: String?) {
         if let k = screenKey {
-            if state.perScreen[k] != nil { state.perScreen[k] = nil }
-            else if let all = state.all {
+            if state.dayNight?[k] != nil { state.dayNight?[k] = nil }
+            else if state.perScreen[k] != nil { state.perScreen[k] = nil }
+            else {
                 // Screen was following "all": keep the others, blank this one by pinning others explicitly.
-                for s in NSScreen.screens where s.stableKey != k { state.perScreen[s.stableKey] = state.perScreen[s.stableKey] ?? all }
+                let allRule = state.dayNight?[EngineState.allKey]
+                for s in NSScreen.screens where s.stableKey != k && state.perScreen[s.stableKey] == nil && state.dayNight?[s.stableKey] == nil {
+                    if let all = state.all { state.perScreen[s.stableKey] = all }
+                    else if let r = allRule { state.dayNight?[s.stableKey] = r }
+                }
                 state.all = nil
+                state.dayNight?[EngineState.allKey] = nil
             }
-        } else { state.all = nil; state.perScreen = [:] }
+        } else { state.all = nil; state.perScreen = [:]; state.dayNight = nil }
         save(); refresh()
     }
 
     func forget(path: String) {
         if state.all?.path == path { state.all = nil }
         state.perScreen = state.perScreen.filter { $0.value.path != path }
+        state.dayNight = state.dayNight?.filter { $0.value.day.path != path && $0.value.night.path != path }
+        save(); refresh()
+    }
+
+    /// Audio-reactive look options for whatever governs this display (its own assignment or the shared one).
+    func reactive(for screen: NSScreen) -> ReactiveOptions { assignment(for: screen)?.reactive ?? ReactiveOptions() }
+    func setReactive(_ o: ReactiveOptions, for screen: NSScreen) {
+        let k = screen.stableKey
+        let v: ReactiveOptions? = o.any ? o : nil
+        if let (r, scope) = rule(for: screen) {
+            var n = r; n.day.reactive = v; n.night.reactive = v
+            state.dayNight?[scope] = n
+        } else if state.perScreen[k] != nil { state.perScreen[k]?.reactive = v }
+        else if state.all != nil { state.all?.reactive = v }
         save(); refresh()
     }
 
     func togglePause() { state.userPaused.toggle(); save(); updatePlayback() }
     func applyLook() {
-        for p in players.values { p.host.applyLook(); p.player.defaultRate = Float(Pref.speed) }
+        for s in surfaces.values { s.applyLook() }
         updatePlayback()
     }
+
+    /// Day/Night phase changed (or the clock/time zone did): show the right wallpaper with a cross-fade.
+    func phaseDidChange() {
+        guard hasDayNightRules else { return }
+        refresh()
+        updateDesktopPictures()
+    }
+
+    // MARK: Desktop picture (shown in Mission Control, other Spaces and after quitting)
 
     private func setDesktop(_ url: URL, _ screen: NSScreen) {
         try? NSWorkspace.shared.setDesktopImageURL(url, for: screen, options: [
             .imageScaling: NSNumber(value: NSImageScaling.scaleProportionallyUpOrDown.rawValue),
             .allowClipping: NSNumber(value: true)])
     }
+    private func setDesktopPicture(_ a: Assignment, _ targets: [NSScreen]) {
+        guard Self.setsDesktopPicture else { return }
+        switch a.kind {
+        case .image: targets.forEach { setDesktop(URL(fileURLWithPath: a.path), $0) }
+        case .video: Task { if let poster = await Media.poster(a) { targets.forEach { self.setDesktop(poster, $0) } } }
+        case .web: break   // no still frame for web pages; the previous desktop picture stays
+        }
+    }
+    private func updateDesktopPictures() {
+        for s in NSScreen.screens where rule(for: s) != nil {
+            if let a = assignment(for: s) { setDesktopPicture(a, [s]) }
+        }
+    }
+
+    // MARK: Windows
+
+    /// Video and web always need a window; a still image needs one only for audio-reactive looks or Day/Night cross-fades.
+    private func needsSurface(_ a: Assignment, _ screen: NSScreen) -> Bool {
+        switch a.kind {
+        case .video, .web: return true
+        case .image: return (a.reactive?.any ?? false) || rule(for: screen) != nil
+        }
+    }
 
     func refresh() {
         var wanted: [String: (NSScreen, Assignment)] = [:]
         for s in NSScreen.screens {
-            if let a = assignment(for: s), a.kind == .video, FileManager.default.fileExists(atPath: a.path) { wanted[s.stableKey] = (s, a) }
+            if let a = assignment(for: s), needsSurface(a, s), FileManager.default.fileExists(atPath: a.path) { wanted[s.stableKey] = (s, a) }
         }
-        for (k, p) in players where wanted[k] == nil || wanted[k]!.1 != p.assignment { p.close(); players[k] = nil }
+        for (k, p) in surfaces where wanted[k] == nil { p.close(); surfaces[k] = nil }
         for (k, (s, a)) in wanted {
-            if let p = players[k] { p.move(to: s) }
-            else {
-                let p = ScreenPlayer(screen: s, key: k, assignment: a)
-                players[k] = p
-                let o = NotificationCenter.default.addObserver(forName: NSWindow.didChangeOcclusionStateNotification, object: p.window, queue: .main) { [weak self, weak p] _ in
-                    MainActor.assumeIsolated {
-                        guard let p else { return }
-                        p.visible = p.window.occlusionState.contains(.visible)
-                        self?.updatePlayback()
-                    }
-                }
-                observers.append(o)
+            if let p = surfaces[k], p.assignment.sameMedia(a) {
+                p.move(to: s)
+                if p.assignment != a { p.update(a) }
+                continue
             }
+            let old = surfaces[k]
+            let n = ScreenSurface(screen: s, key: k, assignment: a)
+            surfaces[k] = n
+            n.occlusionObserver = NotificationCenter.default.addObserver(forName: NSWindow.didChangeOcclusionStateNotification, object: n.window, queue: .main) { [weak self, weak n] _ in
+                MainActor.assumeIsolated {
+                    guard let n else { return }
+                    n.visible = n.window.occlusionState.contains(.visible)
+                    self?.updatePlayback()
+                }
+            }
+            if let old { crossfade(from: old, to: n) }
         }
         updatePlayback()
+    }
+
+    private func crossfade(from old: ScreenSurface, to new: ScreenSurface) {
+        if let o = old.occlusionObserver { NotificationCenter.default.removeObserver(o); old.occlusionObserver = nil }
+        fading.append(old)
+        new.window.isOpaque = false
+        new.window.alphaValue = 0
+        new.window.order(.above, relativeTo: old.window.windowNumber)
+        NSAnimationContext.runAnimationGroup({ ctx in
+            ctx.duration = Self.crossfade
+            new.window.animator().alphaValue = 1
+        }, completionHandler: { [weak self] in
+            MainActor.assumeIsolated {
+                new.window.isOpaque = true
+                old.close()
+                self?.fading.removeAll { $0 === old }
+            }
+        })
     }
 
     func updatePlayback() {
@@ -212,14 +223,26 @@ final class PlayerHostView: NSView {
         else if Pref.pauseOnBattery && onBattery { reason = "On battery" }
         else if Pref.pauseLowPower && lowPower { reason = "Low Power Mode" }
         pauseReason = reason
-        for p in players.values {
-            let covered = Pref.pauseWhenCovered && !p.visible
-            let r = Float(Pref.speed)
-            if reason == nil && !covered { if p.player.rate != r { p.player.defaultRate = r; p.player.rate = r } }
-            else if p.player.rate != 0 { p.player.pause() }
+        var needAudio = false
+        for s in surfaces.values {
+            let covered = Pref.pauseWhenCovered && !s.visible
+            let run = reason == nil && !covered
+            s.setRunning(run)
+            if run && ((s.assignment.reactive?.any ?? false) || s.assignment.kind == .web) { needAudio = true }
+        }
+        if needAudio != audioNeeded {
+            audioNeeded = needAudio
+            if !needAudio { surfaces.values.forEach { $0.resetReactive() } }
+            onAudioNeedChanged?(needAudio)
         }
         tick += 1
     }
+
+    /// Latest (smoothed) audio frame, ~30 times a second while capture runs.
+    func deliverAudio(_ frame: AudioFrame) {
+        for s in surfaces.values where s.isRunning { s.deliver(frame) }
+    }
+    func resetAudioLooks() { surfaces.values.forEach { $0.resetReactive() } }
 
     private func checkBattery() {
         guard let blob = IOPSCopyPowerSourcesInfo()?.takeRetainedValue(),
@@ -252,25 +275,28 @@ final class PlayerHostView: NSView {
     }
 
     /// Diagnostic snapshot (only when `defaults write com.jedbrn.lucid writeStatus -bool YES`).
-    func writeStatus() {
-        guard Pref.writeStatus else { return }
+    func writeStatus(force: Bool = false) {
+        guard Pref.writeStatus || force else { return }
         var screens: [[String: Any]] = []
         for s in NSScreen.screens {
             var row: [String: Any] = ["name": s.localizedName, "key": s.stableKey, "pixels": s.pixelSize,
-                                      "assignment": assignment(for: s)?.title ?? NSNull()]
-            if let p = players[s.stableKey] {
+                                      "assignment": assignment(for: s)?.title ?? NSNull(),
+                                      "dayNight": rule(for: s) != nil]
+            if let p = surfaces[s.stableKey] {
                 row["windowNumber"] = p.window.windowNumber
-                row["rate"] = p.player.rate
-                row["gravity"] = p.host.playerLayer.videoGravity.rawValue
-                row["dim"] = p.host.dimLayer.opacity
-                row["time"] = p.player.currentTime().seconds
+                row["kind"] = p.assignment.kind.rawValue
+                row["running"] = p.isRunning
+                if let pl = p.player { row["rate"] = pl.rate; row["time"] = pl.currentTime().seconds }
+                row["dim"] = Pref.dim
                 row["visible"] = p.visible
+                row["reactive"] = p.assignment.reactive?.any ?? false
                 row["path"] = p.assignment.path
             }
             screens.append(row)
         }
         let j: [String: Any] = ["at": Date().timeIntervalSince1970, "pauseReason": pauseReason ?? NSNull(),
-                                "onBattery": onBattery, "lowPower": lowPower, "locked": locked, "screens": screens]
+                                "onBattery": onBattery, "lowPower": lowPower, "locked": locked, "phase": phase().rawValue,
+                                "audioNeeded": audioNeeded, "fading": fading.count, "screens": screens]
         if let d = try? JSONSerialization.data(withJSONObject: j, options: [.prettyPrinted, .sortedKeys]) { try? d.write(to: Paths.status) }
     }
 }

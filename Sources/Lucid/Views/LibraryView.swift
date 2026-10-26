@@ -13,12 +13,13 @@ import Security
 import UniformTypeIdentifiers
 import ImageIO
 
-enum LibMode { case downloaded, favorites, recents }
+enum LibMode { case downloaded, favorites, recents, wallpaperEngine }
 enum LibSort: String, CaseIterable { case added = "Recently Added", used = "Recently Used", name = "Name", size = "Largest" }
 
 struct LibraryView: View {
     let mode: LibMode
     @EnvironmentObject var store: Store
+    @EnvironmentObject var we: WELibrary
     @State private var selected: WallItem?
     @State private var dropping = false
     @State private var kind = "All"
@@ -31,13 +32,27 @@ struct LibraryView: View {
         case .favorites: return store.favorites.map { store.libraryItem($0.id) ?? $0 }
         case .recents: return Array(store.library.filter { $0.lastAppliedAt != nil && $0.isLocalReady }
                 .sorted { ($0.lastAppliedAt ?? .distantPast) > ($1.lastAppliedAt ?? .distantPast) }.prefix(40))
+        case .wallpaperEngine: return we.items
         }
     }
-    private var title: String { mode == .downloaded ? "Downloaded" : mode == .favorites ? "Favorites" : "Recently Used" }
+    private var title: String {
+        switch mode { case .downloaded: return "Downloaded"; case .favorites: return "Favorites"; case .recents: return "Recently Used"; case .wallpaperEngine: return "Wallpaper Engine" }
+    }
+    static let weUnsupported = "Unsupported on Mac"
 
     private func filtered() -> [WallItem] {
         var items = base.filter { it in
-            let kindOK = kind == "All" || (kind == "Videos" ? it.kind == .video : kind == "Photos" ? it.kind == .image : it.source.label == kind)
+            let kindOK: Bool
+            if mode == .wallpaperEngine {
+                switch kind {
+                case "Videos": kindOK = it.weSupport == .video
+                case "Web": kindOK = it.weSupport == .web
+                case Self.weUnsupported: kindOK = it.weSupport == .unsupported
+                default: kindOK = true
+                }
+            } else {
+                kindOK = kind == "All" || (kind == "Videos" ? it.kind == .video : kind == "Photos" ? it.kind == .image : it.source.label == kind)
+            }
             let qOK = q.isEmpty || it.title.localizedCaseInsensitiveContains(q) || (it.author ?? "").localizedCaseInsensitiveContains(q)
                 || (it.tags ?? []).contains { $0.localizedCaseInsensitiveContains(q) }
             return kindOK && qOK
@@ -65,8 +80,14 @@ struct LibraryView: View {
                         Button { pickFiles() } label: { Label("Import…", systemImage: "plus") }
                         Button { NSWorkspace.shared.open(Paths.media) } label: { Label("Folder", systemImage: "folder") }
                     }
-                    if !items.isEmpty {
-                        Button { if let r = items.randomElement() { store.setWallpaper(r) } } label: { Label("Shuffle", systemImage: "shuffle") }
+                    if mode == .wallpaperEngine {
+                        Button { WEFolderPicker.pick(we) } label: { Label("Add Folder…", systemImage: "plus") }
+                        Button { we.rescan(announce: true) } label: { Label(we.scanning ? "Scanning…" : "Rescan", systemImage: "arrow.clockwise") }
+                            .disabled(we.scanning)
+                    }
+                    let playable = items.filter { $0.weSupport != .unsupported }
+                    if !playable.isEmpty {
+                        Button { if let r = playable.randomElement() { store.setWallpaper(r) } } label: { Label("Shuffle", systemImage: "shuffle") }
                     }
                 }
                 HStack(spacing: 10) {
@@ -76,7 +97,12 @@ struct LibraryView: View {
                             .frame(maxWidth: 220)
                     }
                 }
-                Chips(options: ["All", "Videos", "Photos"] + sources, selected: kind) { kind = $0 }
+                Chips(options: mode == .wallpaperEngine ? ["All", "Videos", "Web", Self.weUnsupported] : ["All", "Videos", "Photos"] + sources,
+                      selected: kind) { kind = $0 }
+                if mode == .wallpaperEngine && !we.errors.isEmpty {
+                    Label("\(we.errors.count) folder\(we.errors.count == 1 ? "" : "s") skipped (unreadable project.json): " + we.errors.prefix(3).joined(separator: "; "),
+                          systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(.orange)
+                }
                 if items.isEmpty { emptyState }
                 Grid(items: items, selected: $selected)
             }.padding(24)
@@ -85,7 +111,21 @@ struct LibraryView: View {
         .sheet(item: $selected) { DetailView(item: $0) }
     }
     @ViewBuilder private var emptyState: some View {
-        if mode == .downloaded && base.isEmpty { firstRunDropZone } else { plainEmptyState }
+        if mode == .downloaded && base.isEmpty { firstRunDropZone }
+        else if mode == .wallpaperEngine && base.isEmpty { weEmptyState }
+        else { plainEmptyState }
+    }
+    private var weEmptyState: some View {
+        VStack(spacing: 12) {
+            Image(systemName: Source.wallpaperEngine.icon).font(.system(size: 50)).foregroundStyle(accent)
+            Text("Link your Wallpaper Engine folder").font(.title2.bold())
+            Text("Wallpaper Engine is a Windows app, so its Workshop downloads are not on this Mac. Copy your own items from your PC (steamapps/workshop/content/431960 or wallpaper_engine/projects/myprojects) and pick that folder. Lucid links to the files and keeps the list in sync; nothing is uploaded or shared.")
+                .multilineTextAlignment(.center).foregroundStyle(.secondary).frame(maxWidth: 560)
+            Button { WEFolderPicker.pick(we) } label: { Label("Choose Folder…", systemImage: "folder.badge.plus") }
+                .buttonStyle(.borderedProminent).tint(accent)
+            Text("Videos play natively, web wallpapers run in WebKit (best effort). Scenes and Windows apps are listed but can't play on a Mac.")
+                .font(.caption).foregroundStyle(.secondary)
+        }.frame(maxWidth: .infinity).padding(.vertical, 56)
     }
     private var firstRunDropZone: some View {
         VStack(spacing: 14) {
@@ -116,6 +156,9 @@ struct LibraryView: View {
         case .downloaded: return "\(n) on this Mac · \(ByteCountFormatter.string(fromByteCount: store.libraryBytes, countStyle: .file)) · hover a card → Apply. Drop your own videos/photos here."
         case .favorites: return "\(n) favorite\(n == 1 ? "" : "s") · tap ♥ on any wallpaper to add it here"
         case .recents: return "The last wallpapers you put on the desktop — reapply one with a click"
+        case .wallpaperEngine:
+            let c = we.counts
+            return "\(c.video) video · \(c.web) web · \(c.unsupported) not playable on Mac · linked from your own folders, never copied or shared"
         }
     }
     private var emptyHint: String {
@@ -123,6 +166,7 @@ struct LibraryView: View {
         case .downloaded: return "Pick something in Discover → Set as Wallpaper, or drop a video/photo here."
         case .favorites: return "Hover any wallpaper and tap ♥."
         case .recents: return "Wallpapers you apply show up here."
+        case .wallpaperEngine: return "Try another filter."
         }
     }
     private func pickFiles() {

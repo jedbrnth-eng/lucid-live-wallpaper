@@ -51,6 +51,9 @@ struct SettingsView: View {
                     Text("Dimming keeps desktop icons and widgets readable on bright wallpapers. Slower speed = calmer motion and less GPU.").font(.caption).foregroundStyle(.secondary)
                 }.frame(maxWidth: .infinity, alignment: .leading).padding(6)
             }
+            AudioSettingsSection()
+            DayNightSettingsSection()
+            WESettingsSection()
             GroupBox("Adding wallpapers") {
                 VStack(alignment: .leading, spacing: 8) {
                     Toggle("Auto-add 4K videos and photos I download to ~/Downloads", isOn: $watch)

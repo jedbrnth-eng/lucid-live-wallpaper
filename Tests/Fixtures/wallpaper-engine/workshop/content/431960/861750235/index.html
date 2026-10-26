@@ -1,1 +1,9 @@
-<!doctype html><html><body><script>window.wallpaperRegisterAudioListener(function(a){});</script></body></html>
+<!doctype html>
+<html><body style="margin:0;background:#102030">
+<canvas id="c"></canvas>
+<script>
+  // Fixture: records what the host delivers, so Lucid's dev check can verify the shim end to end.
+  window.wallpaperPropertyListener = { applyUserProperties: function (p) { window.__gotProps = JSON.stringify(p); } };
+  window.wallpaperRegisterAudioListener(function (a) { window.__gotAudio = a.length; window.__audioPeak = Math.max.apply(null, a); });
+</script>
+</body></html>

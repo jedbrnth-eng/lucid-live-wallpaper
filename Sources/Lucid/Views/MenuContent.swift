@@ -18,7 +18,7 @@ struct MenuContent: View {
     @EnvironmentObject var store: Store
     @Environment(\.openWindow) private var openWindow
     var body: some View {
-        Text(engine.state.all?.title ?? engine.state.perScreen.values.first?.title ?? "No wallpaper set")
+        Text(engine.currentAssignments.first?.title ?? "No wallpaper set")
         if let r = engine.pauseReason { Text("Paused — \(r)") }
         Divider()
         if let p = store.activePlaylist { Text("Playlist: \(p.name)") }

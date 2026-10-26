@@ -15,7 +15,7 @@ import ImageIO
 
 // MARK: - Models
 
-enum Kind: String, Codable { case video, image }
+enum Kind: String, Codable { case video, image, web }   // web = Wallpaper Engine HTML wallpaper
 
 enum KeyName: String, CaseIterable { case pixabay
     var label: String { "Pixabay" }
@@ -23,7 +23,7 @@ enum KeyName: String, CaseIterable { case pixabay
 }
 
 enum Source: String, Codable, CaseIterable, Identifiable {
-    case aerials, live, pixabayVideo, nasa, wikimedia, local
+    case aerials, live, pixabayVideo, nasa, wikimedia, local, wallpaperEngine
     var id: String { rawValue }
     static let discoverable: [Source] = [.aerials, .live, .pixabayVideo, .nasa, .wikimedia]
 
@@ -35,6 +35,7 @@ enum Source: String, Codable, CaseIterable, Identifiable {
         case .nasa: return "NASA 4K Space"
         case .wikimedia: return "Wikimedia 4K Photos"
         case .local: return "My Files"
+        case .wallpaperEngine: return "Wallpaper Engine"
         }
     }
     var icon: String {
@@ -45,6 +46,7 @@ enum Source: String, Codable, CaseIterable, Identifiable {
         case .nasa: return "moon.stars"
         case .wikimedia: return "building.columns"
         case .local: return "folder"
+        case .wallpaperEngine: return "square.stack.3d.down.right"
         }
     }
     var blurb: String {
@@ -55,6 +57,7 @@ enum Source: String, Codable, CaseIterable, Identifiable {
         case .nasa: return "NASA Image Library — space & Earth photos, only originals ≥3840×2160. Free, no account. Generally public domain."
         case .wikimedia: return "Wikimedia Commons, filtered to ≥3840×2160 landscape images. Free, no account. Per-image license shown."
         case .local: return "Your own files."
+        case .wallpaperEngine: return "Your own Wallpaper Engine items, read from folders you choose. Lucid only links to them and never copies or shares them."
         }
     }
     var needsKey: KeyName? {
@@ -107,6 +110,14 @@ struct WallItem: Codable, Identifiable, Hashable {
     var creditFull: String?
     var lastAppliedAt: Date?
     var tags: [String]?
+    // Wallpaper Engine items (local references only)
+    var weSupport: WESupport?
+    var weNote: String?
+    var weFolder: String?
+    var weMainFile: String?
+    var weFallback: String?
+    var weProps: String?
+    var weNeedsConversion: Bool?
 
     var is4K: Bool { max(width, height) >= 3840 && min(width, height) >= 2160 }
     var resLabel: String {
@@ -125,10 +136,24 @@ struct Assignment: Codable, Equatable {
     var title: String
     var path: String
     var kind: Kind
+    var reactive: ReactiveOptions?   // optional audio-reactive look for this wallpaper
+    var webProps: String?            // Wallpaper Engine web wallpapers: default user properties JSON
+
+    /// Same media on screen (ignores look options, which are updated in place without reloading).
+    func sameMedia(_ o: Assignment) -> Bool { path == o.path && kind == o.kind && webProps == o.webProps }
+}
+
+/// A Day/Night assignment: one wallpaper between sunrise and sunset, another the rest of the time.
+struct DayNightRule: Codable, Equatable {
+    var day: Assignment
+    var night: Assignment
+    func pick(_ p: DayPhase) -> Assignment { p == .day ? day : night }
 }
 
 struct EngineState: Codable {
     var all: Assignment?
     var perScreen: [String: Assignment] = [:]
     var userPaused = false
+    var dayNight: [String: DayNightRule]?   // key: display key, or "*" for all displays. Optional so old state.json still decodes.
+    static let allKey = "*"
 }

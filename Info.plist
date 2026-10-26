@@ -14,6 +14,9 @@
 	<key>LSApplicationCategoryType</key><string>public.app-category.utilities</string>
 	<key>NSHighResolutionCapable</key><true/>
 	<key>NSPrincipalClass</key><string>NSApplication</string>
+	<key>NSAudioCaptureUsageDescription</key><string>Lucid listens to the sound your Mac is playing (never the microphone) so audio-reactive wallpapers can move with your music. The sound is analysed on this Mac and is never recorded or sent anywhere. You can turn this off in Lucid's Settings.</string>
+	<key>NSLocationUsageDescription</key><string>Lucid uses your approximate location only to work out today's sunrise and sunset for Day/Night wallpapers. It stays on this Mac.</string>
+	<key>NSLocationWhenInUseUsageDescription</key><string>Lucid uses your approximate location only to work out today's sunrise and sunset for Day/Night wallpapers. It stays on this Mac.</string>
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>

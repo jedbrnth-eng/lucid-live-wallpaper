@@ -60,16 +60,25 @@ struct Card: View {
     @EnvironmentObject var engine: WallpaperEngine
     @State private var hover = false
     var body: some View {
-        let current = engine.state.all?.itemID == item.id || engine.state.perScreen.values.contains { $0.itemID == item.id }
+        let current = engine.currentAssignments.contains { $0.itemID == item.id }
+        let unsupported = item.weSupport == .unsupported
+        let canPreview = unsupported && item.weFallback != nil && Pref.weScenePreviews
         VStack(alignment: .leading, spacing: 6) {
             Color.clear.aspectRatio(16 / 9, contentMode: .fit)
-                .overlay(RemoteImage(url: item.thumbURL, localPath: item.thumbPath))
+                .overlay(RemoteImage(url: item.thumbURL, localPath: item.thumbPath).saturation(unsupported ? 0 : 1).opacity(unsupported ? 0.45 : 1))
                 .clipShape(RoundedRectangle(cornerRadius: 10))
                 .overlay(RoundedRectangle(cornerRadius: 10).stroke(current ? accent : (hover ? accent.opacity(0.5) : Color.white.opacity(0.08)), lineWidth: current ? 2 : 1))
                 .overlay(alignment: .topLeading) {
                     HStack(spacing: 4) {
-                        Badge(text: item.resLabel, color: item.is4K ? accent : .orange)
-                        if item.kind == .video { Badge(text: "LIVE", color: accent2) }
+                        if item.source == .wallpaperEngine {
+                            if unsupported { Badge(text: "NOT ON MAC", color: .orange) }
+                            else if item.weSupport == .web { Badge(text: "WEB", color: accent) }
+                            else { Badge(text: item.width > 0 ? item.resLabel : "VIDEO", color: item.width == 0 || item.is4K ? accent : .orange) }
+                            if item.weSupport == .video { Badge(text: "LIVE", color: accent2) }
+                        } else {
+                            Badge(text: item.resLabel, color: item.is4K ? accent : .orange)
+                            if item.kind == .video { Badge(text: "LIVE", color: accent2) }
+                        }
                     }.padding(7)
                 }
                 .overlay(alignment: .topTrailing) {
@@ -89,9 +98,13 @@ struct Card: View {
                                     .foregroundStyle(store.isFavorite(item.id) ? accent2 : .white)
                             }.help("Favorite")
                             Spacer()
-                            Button { store.setWallpaper(item) } label: {
-                                Label(current ? "On Desktop" : "Apply", systemImage: current ? "checkmark" : "sparkles.tv").font(.caption.weight(.bold))
-                            }.help("Set as wallpaper on all displays")
+                            if unsupported && !canPreview {
+                                Text("Not playable on Mac").font(.caption.weight(.bold)).foregroundStyle(.orange)
+                            } else {
+                                Button { store.setWallpaper(item) } label: {
+                                    Label(current ? "On Desktop" : canPreview ? "Apply Preview" : "Apply", systemImage: current ? "checkmark" : "sparkles.tv").font(.caption.weight(.bold))
+                                }.help(canPreview ? "Use the scene's animated preview as a stand-in (not the real scene)" : "Set as wallpaper on all displays")
+                            }
                         }
                         .buttonStyle(.plain).padding(.horizontal, 10).padding(.vertical, 7)
                         .background(LinearGradient(colors: [.clear, .black.opacity(0.75)], startPoint: .top, endPoint: .bottom))
@@ -99,8 +112,9 @@ struct Card: View {
                 }
                 .scaleEffect(hover ? 1.015 : 1).animation(.easeOut(duration: 0.15), value: hover)
             Text(item.title).font(.callout.weight(.medium)).lineLimit(1)
-            Text([item.author, item.category].compactMap { $0 }.joined(separator: " · ").ifEmpty(item.source.label))
-                .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+            Text(item.source == .wallpaperEngine ? (item.weNote ?? item.source.label)
+                 : [item.author, item.category].compactMap { $0 }.joined(separator: " · ").ifEmpty(item.source.label))
+                .font(.caption).foregroundStyle(unsupported ? Color.orange.opacity(0.85) : .secondary).lineLimit(1)
         }
         .contentShape(Rectangle())
         .onHover { hover = $0 }
@@ -129,7 +143,9 @@ struct ItemMenu: View {
         }
         if let pid = playlistID { Button("Remove from This Playlist") { store.removeFromPlaylist(item.id, pid) } }
         Divider()
-        if let lib = store.libraryItem(item.id) {
+        if item.source == .wallpaperEngine, let f = item.weFolder {
+            Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: f)]) }
+        } else if let lib = store.libraryItem(item.id) {
             if let p = lib.localPath { Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: p)]) } }
             Button("Remove from Library", role: .destructive) { store.remove(lib) }
         } else {

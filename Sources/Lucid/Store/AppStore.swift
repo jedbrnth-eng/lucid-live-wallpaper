@@ -30,7 +30,10 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
 
 @MainActor final class Store: ObservableObject {
     static let shared = Store()
-    let engine = WallpaperEngine()
+    let engine: WallpaperEngine
+    let dayNight: DayNightController
+    let audio: AudioReactive
+    let we = WELibrary()
     let downloader = Downloader()
     @Published var library: [WallItem] = []
     @Published var aerials: [WallItem] = []
@@ -52,6 +55,10 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
     private var rotateTimer: Timer?
 
     init() {
+        let e = WallpaperEngine()
+        engine = e
+        dayNight = DayNightController(engine: e)   // sets the phase before the first refresh
+        audio = AudioReactive(engine: e)
         if let d = try? Data(contentsOf: Paths.library), let l = try? JSONDecoder().decode([WallItem].self, from: d) { library = l }
         aerials = Providers.aerials()
         live = LiveCatalog.load()
@@ -67,6 +74,9 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
         folderTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.adoptStrayFiles() }
         }
+        we.flash = { [weak self] in self?.flash($0) }
+        we.onRemoved = { [weak self] paths in paths.forEach { self?.engine.forget(path: $0) } }
+        we.start()
     }
 
     /// Anything dropped straight into the Lucid folder (Media/ or the folder itself) isn't in library.json,
@@ -123,12 +133,29 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
         if let d = try? JSONEncoder().encode(favorites) { try? d.write(to: Paths.favorites, options: .atomic) }
     }
     var currentItem: WallItem? {
-        guard let id = engine.state.all?.itemID ?? engine.state.perScreen.values.first?.itemID else { return nil }
+        guard let id = engine.currentAssignments.first?.itemID else { return nil }
         return findItem(id)
     }
     func findItem(_ id: String) -> WallItem? {
         libraryItem(id) ?? favorites.first { $0.id == id } ?? playlists.lazy.flatMap(\.items).first { $0.id == id }
-            ?? live.first { $0.id == id } ?? aerials.first { $0.id == id }
+            ?? live.first { $0.id == id } ?? aerials.first { $0.id == id } ?? we.items.first { $0.id == id }
+    }
+
+    /// An assignment that can go on screen right now (used by Day/Night), converting a WE video if needed.
+    func readyAssignment(for item: WallItem) async -> Assignment? {
+        if item.source == .wallpaperEngine { return await we.assignment(for: we.items.first { $0.id == item.id } ?? item) }
+        guard let lib = libraryItem(item.id) ?? (item.isLocalReady ? item : nil), lib.isLocalReady, let p = lib.localPath else { return nil }
+        return Assignment(itemID: lib.id, title: lib.title, path: p, kind: lib.kind)
+    }
+
+    func setDayNight(day: WallItem, night: WallItem, screenKey: String?) {
+        Task {
+            guard let d = await readyAssignment(for: day), let n = await readyAssignment(for: night) else {
+                flash("Both Day and Night wallpapers must be on this Mac first"); return
+            }
+            engine.applyDayNight(DayNightRule(day: d, night: n), screenKey: screenKey)
+            flash("Day/Night set: \(d.title) by day, \(n.title) at night")
+        }
     }
 
     // Playlists
@@ -214,6 +241,16 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
 
     // Applying
     func setWallpaper(_ item: WallItem, screenKey: String? = nil) {
+        if item.source == .wallpaperEngine {
+            let it = we.items.first { $0.id == item.id } ?? item
+            Task {
+                guard let a = await we.assignment(for: it) else { return }
+                engine.apply(a, screenKey: screenKey)
+                didApply(it.id)
+                flash("Wallpaper set: \(a.title)")
+            }
+            return
+        }
         if let lib = libraryItem(item.id), lib.isLocalReady, let p = lib.localPath {
             engine.apply(Assignment(itemID: lib.id, title: lib.title, path: p, kind: lib.kind), screenKey: screenKey)
             didApply(lib.id)
@@ -433,6 +470,10 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
         }
         r["favorites"] = favorites.count
         r["playlists"] = playlists.count
+        r["wallpaper_engine"] = ["folders": we.roots.map(\.path), "video": we.counts.video, "web": we.counts.web,
+                                 "unsupported": we.counts.unsupported, "errors": we.errors.count]
+        r["day_night_phase"] = dayNight.phase.rawValue
+        r["audio_reactive"] = audio.status.text
         r["screens"] = NSScreen.screens.map { "\($0.localizedName) \($0.pixelSize)" }
         return r
     }
