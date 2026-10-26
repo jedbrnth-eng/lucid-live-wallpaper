@@ -11,6 +11,7 @@ import CoreLocation
 
 @MainActor final class DayNightController: NSObject, ObservableObject, CLLocationManagerDelegate {
     @Published private(set) var phase: DayPhase = .day
+    @Published private(set) var part: DayPart = .day
     @Published private(set) var nextChange: Date?
     @Published private(set) var sourceText = ""
     private weak var engine: LucidEngine?
@@ -24,7 +25,9 @@ import CoreLocation
         self.engine = engine
         super.init()
         engine.phase = { [weak self] in self?.phase ?? .day }
+        engine.part = { [weak self] in self?.part ?? .day }
         phase = schedule().phase(at: now())
+        part = schedule().part(at: now())
         let wnc = NSWorkspace.shared.notificationCenter
         observers.append(wnc.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.evaluate() } })
@@ -66,12 +69,13 @@ import CoreLocation
         let (s, text) = make()
         sourceText = text
         let t = now()
-        let p = s.phase(at: t)
-        let changed = p != phase
-        phase = p
+        let p = s.phase(at: t), q = s.part(at: t)
+        let changed = p != phase || q != part
+        phase = p; part = q
         nextChange = s.nextChange(after: t)
         timer?.invalidate()
-        if let n = nextChange {
+        // Wake at the next sunrise/sunset or dawn/dusk edge, whichever is first.
+        if let n = [nextChange, s.nextBoundary(after: t)].compactMap({ $0 }).min() {
             // +1 s so we land just after the boundary; cap so a long sleep can't leave us stale.
             let wait = min(max(1, n.timeIntervalSince(t) + 1), 6 * 3600)
             timer = Timer.scheduledTimer(withTimeInterval: wait, repeats: false) { [weak self] _ in MainActor.assumeIsolated { self?.evaluate() } }

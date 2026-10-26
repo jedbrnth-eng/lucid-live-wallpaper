@@ -75,7 +75,7 @@ struct DayNightSettingsSection: View {
                 let today = dayNight.todayTimes()
                 Text(dayNight.sourceText + (today.map { " · today ☀︎ \(timeText($0.0)) ☾ \(timeText($0.1))" } ?? ""))
                     .font(.caption).foregroundStyle(.secondary)
-                Text("Now: \(dayNight.phase == .day ? "Day" : "Night") · next switch \(timeText(dayNight.nextChange))")
+                Text("Now: \(dayNight.part.rawValue.capitalized) · next sunrise/sunset switch \(timeText(dayNight.nextChange))")
                     .font(.caption).foregroundStyle(.secondary)
                 Text("Set a Day/Night pair in Displays. It switches with a short cross-fade and re-checks after sleep, time zone or clock changes.")
                     .font(.caption).foregroundStyle(.secondary)
@@ -100,6 +100,8 @@ struct DayNightSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var dayID = ""
     @State private var nightID = ""
+    @State private var dawnID = ""
+    @State private var duskID = ""
 
     private var choices: [WallItem] {
         store.library.filter(\.isLocalReady)
@@ -119,6 +121,16 @@ struct DayNightSheet: View {
                 Text("Choose…").tag("")
                 ForEach(choices) { Text(label($0)).tag($0.id) }
             }
+            Picker("🌅 Dawn (optional)", selection: $dawnID) {
+                Text("None (use Day/Night)").tag("")
+                ForEach(choices) { Text(label($0)).tag($0.id) }
+            }.accessibilityLabel("Optional dawn wallpaper")
+            Picker("🌇 Dusk (optional)", selection: $duskID) {
+                Text("None (use Day/Night)").tag("")
+                ForEach(choices) { Text(label($0)).tag($0.id) }
+            }.accessibilityLabel("Optional dusk wallpaper")
+            Text("Dawn runs from first light until the sun is a little up; dusk from golden hour until last light (with fixed times: the first and last hour of the day).")
+                .font(.caption).foregroundStyle(.secondary)
             if choices.isEmpty { Text("Add wallpapers to your library first.").foregroundStyle(.orange) }
             Text(dayNight.sourceText + (dayNight.todayTimes().map { " · today ☀︎ \(timeText($0.0)) ☾ \(timeText($0.1))" } ?? ""))
                 .font(.caption).foregroundStyle(.secondary)
@@ -127,7 +139,8 @@ struct DayNightSheet: View {
                 Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
                 Button("Set Day/Night") {
                     if let d = choices.first(where: { $0.id == dayID }), let n = choices.first(where: { $0.id == nightID }) {
-                        store.setDayNight(day: d, night: n, screenKey: target.screenKey)
+                        store.setDayNight(day: d, night: n, dawn: choices.first { $0.id == dawnID }, dusk: choices.first { $0.id == duskID },
+                                          screenKey: target.screenKey)
                     }
                     dismiss()
                 }
@@ -138,7 +151,9 @@ struct DayNightSheet: View {
         .padding(20).frame(width: 540)
         .onAppear {
             let scope = target.screenKey ?? EngineState.allKey
-            if let r = engine.state.dayNight?[scope] { dayID = r.day.itemID; nightID = r.night.itemID }
+            if let r = engine.state.dayNight?[scope] {
+                dayID = r.day.itemID; nightID = r.night.itemID; dawnID = r.dawn?.itemID ?? ""; duskID = r.dusk?.itemID ?? ""
+            }
         }
     }
 }

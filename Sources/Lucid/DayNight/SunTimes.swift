@@ -42,16 +42,16 @@ enum SunTimes {
     }
 
     /// cos(hour angle) of sunrise; > 1 means no sunrise (polar night), < -1 means no sunset (polar day).
-    private static func cosHourAngle(_ lat: Double, _ decl: Double) -> Double {
-        cos(rad(90.833)) / (cos(rad(lat)) * cos(rad(decl))) - tan(rad(lat)) * tan(rad(decl))
+    private static func cosHourAngle(_ lat: Double, _ decl: Double, zenith: Double = 90.833) -> Double {
+        cos(rad(zenith)) / (cos(rad(lat)) * cos(rad(decl))) - tan(rad(lat)) * tan(rad(decl))
     }
 
     /// Minutes after 00:00 UTC of the given calendar date (may be negative or > 1440).
-    private static func eventMinutes(rise: Bool, jd: Double, lat: Double, lon: Double) -> Double? {
+    private static func eventMinutes(rise: Bool, jd: Double, lat: Double, lon: Double, zenith: Double = 90.833) -> Double? {
         func once(_ jdAt: Double) -> Double? {
             let t = (jdAt - 2451545.0) / 36525
             let s = solar(t)
-            let c = cosHourAngle(lat, s.decl)
+            let c = cosHourAngle(lat, s.decl, zenith: zenith)
             guard c >= -1, c <= 1 else { return nil }
             let ha = deg(acos(c)) * (rise ? 1 : -1)
             return 720 - 4 * (lon + ha) - s.eqTime
@@ -75,7 +75,28 @@ enum SunTimes {
     }
 }
 
+extension SunTimes {
+    /// When the sun's centre crosses `elevation` degrees (e.g. -6 = civil twilight, +6 = end of golden hour) on a
+    /// calendar date, morning and evening. polarDay = always above, polarNight = always below on that date.
+    static func elevationEvents(year: Int, month: Int, day: Int, latitude: Double, longitude: Double, elevation: Double) -> SunEvent? {
+        let lat = min(89.8, max(-89.8, latitude)), zen = 90 - elevation
+        let jd = julianDay(year: year, month: month, day: day)
+        var utc = Calendar(identifier: .gregorian); utc.timeZone = TimeZone(identifier: "UTC") ?? .current
+        guard let midnightUTC = utc.date(from: DateComponents(year: year, month: month, day: day)) else { return nil }
+        if let r = eventMinutes(rise: true, jd: jd, lat: lat, lon: longitude, zenith: zen),
+           let s = eventMinutes(rise: false, jd: jd, lat: lat, lon: longitude, zenith: zen) {
+            return .normal(sunrise: midnightUTC.addingTimeInterval(r * 60), sunset: midnightUTC.addingTimeInterval(s * 60))
+        }
+        let noon = solar((jd + 0.5 - 2451545.0) / 36525)
+        return cosHourAngle(lat, noon.decl, zenith: zen) < -1 ? .polarDay : .polarNight
+    }
+}
+
 enum DayPhase: String, Codable { case day, night }
+
+/// Four-phase day. Dawn: civil dawn (sun -6°) until the sun is +6° up; dusk: +6° until civil dusk. With fixed
+/// times: the first hour after day starts and the last hour before night.
+enum DayPart: String, Codable, CaseIterable { case dawn, day, dusk, night }
 
 struct DayNightSchedule {
     enum Mode: Equatable {
@@ -108,6 +129,65 @@ struct DayNightSchedule {
             if ds == ns { return .day }
             return ds < ns ? (m >= ds && m < ns ? .day : .night) : (m >= ds || m < ns ? .day : .night)
         }
+    }
+
+    /// Twilight (-6°) and golden-hour (+6°) crossings for the local day of `d`.
+    private func edges(onLocalDayOf d: Date) -> (twilight: SunEvent?, golden: SunEvent?) {
+        guard case .sun(let lat, let lon) = mode else { return (nil, nil) }
+        let c = calendar.dateComponents([.year, .month, .day], from: d)
+        guard let y = c.year, let m = c.month, let dd = c.day else { return (nil, nil) }
+        return (SunTimes.elevationEvents(year: y, month: m, day: dd, latitude: lat, longitude: lon, elevation: -6),
+                SunTimes.elevationEvents(year: y, month: m, day: dd, latitude: lat, longitude: lon, elevation: 6))
+    }
+
+    func part(at d: Date) -> DayPart {
+        switch mode {
+        case .sun:
+            let (tw, gold) = edges(onLocalDayOf: d)
+            switch gold {
+            case .normal(let a, let b)?: if a <= d && d < b { return .day }
+            case .polarDay?: return .day
+            default: break
+            }
+            switch tw {
+            case .normal(let a, let b)?:
+                guard a <= d && d < b else { return .night }
+                return d < a.addingTimeInterval(b.timeIntervalSince(a) / 2) ? .dawn : .dusk
+            case .polarDay?:   // twilight all night (white nights): follow sunrise/sunset
+                return phase(at: d) == .day ? .day : .night
+            default: return .night
+            }
+        case .manual(let dayStart, let nightStart):
+            guard phase(at: d) == .day else { return .night }
+            if dayStart == nightStart { return .day }
+            let c = calendar.dateComponents([.hour, .minute], from: d)
+            let m = (c.hour ?? 0) * 60 + (c.minute ?? 0)
+            if (m - dayStart + 1440) % 1440 < 60 { return .dawn }
+            if (nightStart - m + 1440) % 1440 <= 60 { return .dusk }
+            return .day
+        }
+    }
+
+    /// The next instant strictly after `d` at which the four-phase part (or the day/night phase) may change.
+    func nextBoundary(after d: Date) -> Date? {
+        let cal = calendar
+        let today = cal.startOfDay(for: d)
+        var candidates: [Date] = []
+        for offset in 0...2 {
+            guard let day = cal.date(byAdding: .day, value: offset, to: today) else { continue }
+            switch mode {
+            case .sun:
+                let noon = day.addingTimeInterval(12 * 3600)
+                let (tw, gold) = edges(onLocalDayOf: noon)
+                for e in [tw, gold, sunEvent(onLocalDayOf: noon)] { if case .normal(let a, let b)? = e { candidates += [a, b] } }
+            case .manual(let ds, let ns):
+                for m in [ds, ds + 60, ns - 60, ns] {
+                    let mm = (m + 1440) % 1440
+                    if let t = cal.date(bySettingHour: mm / 60, minute: mm % 60, second: 0, of: day) { candidates.append(t) }
+                }
+            }
+        }
+        return candidates.filter { $0 > d }.min() ?? cal.date(byAdding: .day, value: 1, to: today)
     }
 
     /// The next instant strictly after `d` at which the phase may change.

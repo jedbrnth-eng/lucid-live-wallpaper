@@ -43,6 +43,18 @@ import AppKit
             r["dn_fading_during"] = engine.surfaces.count > 0
             await wait(LucidEngine.crossfade + 1)
             r["dn_night_shown"] = engine.surfaces[main.stableKey]?.assignment.itemID
+            // Four phases: add a dawn wallpaper; at dawn (two-phase still "night") it shows, at dusk without one night stays.
+            if let dawnPNG = makePNG(.systemYellow, "check-dawn.png") {
+                var four = rule; four.dawn = Assignment(itemID: "check-dawn", title: "Check Dawn", path: dawnPNG.path, kind: .image)
+                engine.applyDayNight(four, screenKey: nil)
+                engine.part = { .dawn }; engine.phaseDidChange()
+                await wait(LucidEngine.crossfade + 0.8)
+                r["dn4_dawn_shown"] = engine.surfaces[main.stableKey]?.assignment.itemID
+                engine.part = { .dusk }; engine.phaseDidChange()
+                await wait(LucidEngine.crossfade + 0.8)
+                r["dn4_dusk_without_wallpaper_shows"] = engine.surfaces[main.stableKey]?.assignment.itemID
+                engine.part = { .night }
+            }
             if let d = try? Data(contentsOf: Paths.state), let st = try? JSONDecoder().decode(EngineState.self, from: d) {
                 r["dn_persisted"] = st.dayNight?[EngineState.allKey] != nil
             }

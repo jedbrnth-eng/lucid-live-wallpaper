@@ -39,6 +39,8 @@ import ImageIO
 
     /// Current day/night phase (set by DayNightController).
     var phase: () -> DayPhase = { .day }
+    /// Current four-phase part (dawn/day/dusk/night), set by DayNightController.
+    var part: () -> DayPart = { .day }
     /// Called when audio capture becomes needed / not needed (some running wallpaper reacts to sound).
     var onAudioNeedChanged: ((Bool) -> Void)?
     private(set) var audioNeeded = false
@@ -65,7 +67,7 @@ import ImageIO
     var hasDayNightRules: Bool { !(state.dayNight ?? [:]).isEmpty }
 
     func assignment(for screen: NSScreen) -> Assignment? {
-        if let r = rule(for: screen) { return r.rule.pick(phase()) }
+        if let r = rule(for: screen) { return r.rule.pick(phase(), part: part()) }
         return state.perScreen[screen.stableKey] ?? state.all
     }
     var currentAssignments: [Assignment] { NSScreen.screens.compactMap(assignment(for:)) }
@@ -126,7 +128,12 @@ import ImageIO
     func forget(path: String) {
         if state.all?.path == path { state.all = nil }
         state.perScreen = state.perScreen.filter { $0.value.path != path }
-        state.dayNight = state.dayNight?.filter { $0.value.day.path != path && $0.value.night.path != path }
+        state.dayNight = state.dayNight?.filter { $0.value.day.path != path && $0.value.night.path != path }.mapValues { r in
+            var r = r
+            if r.dawn?.path == path { r.dawn = nil }
+            if r.dusk?.path == path { r.dusk = nil }
+            return r
+        }
         save(); refresh()
     }
 
@@ -136,8 +143,7 @@ import ImageIO
         let k = screen.stableKey
         let v: ReactiveOptions? = o.any ? o : nil
         if let (r, scope) = rule(for: screen) {
-            var n = r; n.day.reactive = v; n.night.reactive = v
-            state.dayNight?[scope] = n
+            state.dayNight?[scope] = r.mapAll { var a = $0; a.reactive = v; return a }
         } else if state.perScreen[k] != nil { state.perScreen[k]?.reactive = v }
         else if state.all != nil { state.all?.reactive = v }
         save(); refresh()
@@ -148,7 +154,7 @@ import ImageIO
         func fix(_ a: Assignment) -> Assignment { var a = a; if a.itemID == itemID { a.options = o }; return a }
         state.all = state.all.map(fix)
         state.perScreen = state.perScreen.mapValues(fix)
-        state.dayNight = state.dayNight?.mapValues { DayNightRule(day: fix($0.day), night: fix($0.night)) }
+        state.dayNight = state.dayNight?.mapValues { $0.mapAll(fix) }
         save(); refresh()
     }
 
@@ -408,7 +414,7 @@ import ImageIO
         let j: [String: Any] = ["at": Date().timeIntervalSince1970, "pauseReason": pauseReason ?? NSNull(),
                                 "onBattery": power.onBattery, "batteryPercent": power.batteryPercent ?? NSNull(), "lowPower": power.lowPower,
                                 "locked": power.locked, "thermal": power.thermal.rawValue, "cpuBusy": power.cpuBusy, "parked": parked,
-                                "statusText": statusText, "phase": phase().rawValue,
+                                "statusText": statusText, "phase": phase().rawValue, "part": part().rawValue,
                                 "audioNeeded": audioNeeded, "fading": fading.count, "screens": screens]
         if let d = try? JSONSerialization.data(withJSONObject: j, options: [.prettyPrinted, .sortedKeys]) { try? d.write(to: Paths.status) }
     }

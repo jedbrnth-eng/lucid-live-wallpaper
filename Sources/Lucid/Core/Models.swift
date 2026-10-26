@@ -162,7 +162,31 @@ struct WallpaperOptions: Codable, Equatable, Hashable {
 struct DayNightRule: Codable, Equatable {
     var day: Assignment
     var night: Assignment
+    var dawn: Assignment?   // optional (1.3.0+): shown from civil dawn until the sun is 6° up
+    var dusk: Assignment?   // optional (1.3.0+): shown from 6° before sunset until civil dusk
+
+    init(day: Assignment, night: Assignment, dawn: Assignment? = nil, dusk: Assignment? = nil) {
+        self.day = day; self.night = night; self.dawn = dawn; self.dusk = dusk
+    }
+    /// Day and night are required; a dawn/dusk side that doesn't decode is dropped on its own.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        day = try c.decode(Assignment.self, forKey: .day)
+        night = try c.decode(Assignment.self, forKey: .night)
+        dawn = (try? c.decodeIfPresent(Assignment.self, forKey: .dawn)) ?? nil
+        dusk = (try? c.decodeIfPresent(Assignment.self, forKey: .dusk)) ?? nil
+    }
     func pick(_ p: DayPhase) -> Assignment { p == .day ? day : night }
+    /// Dawn/dusk wallpapers win in their window; without one, the 1.2.0 day/night answer is used unchanged.
+    func pick(_ p: DayPhase, part: DayPart) -> Assignment {
+        switch part {
+        case .dawn: return dawn ?? pick(p)
+        case .dusk: return dusk ?? pick(p)
+        default: return pick(p)
+        }
+    }
+    var all: [Assignment] { [day, night] + [dawn, dusk].compactMap { $0 } }
+    func mapAll(_ f: (Assignment) -> Assignment) -> DayNightRule { DayNightRule(day: f(day), night: f(night), dawn: dawn.map(f), dusk: dusk.map(f)) }
 }
 
 struct EngineState: Codable {

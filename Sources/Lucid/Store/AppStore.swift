@@ -163,11 +163,12 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
         engine.updateOptions(itemID: item.id, library[i].options)
     }
 
-    func setDayNight(day: WallItem, night: WallItem, screenKey: String?) {
+    func setDayNight(day: WallItem, night: WallItem, dawn: WallItem? = nil, dusk: WallItem? = nil, screenKey: String?) {
         guard let d = readyAssignment(for: day), let n = readyAssignment(for: night) else {
             flash("Both Day and Night wallpapers must be on this Mac first"); return
         }
-        engine.applyDayNight(DayNightRule(day: d, night: n), screenKey: screenKey)
+        engine.applyDayNight(DayNightRule(day: d, night: n, dawn: dawn.flatMap(readyAssignment(for:)), dusk: dusk.flatMap(readyAssignment(for:))),
+                             screenKey: screenKey)
         flash("Day/Night set: \(d.title) by day, \(n.title) at night")
     }
 
