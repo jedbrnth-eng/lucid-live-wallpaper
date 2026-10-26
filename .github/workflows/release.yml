@@ -31,7 +31,11 @@ jobs:
         run: ./build.sh
       - name: Package
         if: steps.exists.outputs.found == 'false'
-        run: ditto -c -k --sequesterRsrc --keepParent build/Lucid.app Lucid.zip
+        run: |
+          ditto -c -k --sequesterRsrc --keepParent build/Lucid.app Lucid.zip
+          # Checksum users and install.sh can verify the download against.
+          shasum -a 256 Lucid.zip > Lucid.zip.sha256
+          cat Lucid.zip.sha256
       - name: Publish release
         if: steps.exists.outputs.found == 'false'
         env:
@@ -41,6 +45,6 @@ jobs:
           v="$(tr -d '[:space:]' < VERSION)"
           awk -v h="## [$v]" 'index($0, h) == 1 {on = 1; print "## Changes in this version"; next} on && (/^## \[/ || /^\[[^]]+\]: /) {exit} on' CHANGELOG.md > notes.md
           cat .github/release-notes.md >> notes.md
-          gh release create "${{ steps.v.outputs.tag }}" Lucid.zip \
+          gh release create "${{ steps.v.outputs.tag }}" Lucid.zip Lucid.zip.sha256 \
             --title "Lucid ${{ steps.v.outputs.tag }}" \
             --notes-file notes.md

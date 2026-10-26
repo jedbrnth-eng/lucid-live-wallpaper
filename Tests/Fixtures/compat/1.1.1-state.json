@@ -1,0 +1,17 @@
+{
+  "all" : {
+    "itemID" : "local:Neon-123",
+    "kind" : "video",
+    "path" : "\/Users\/example\/Library\/Application Support\/Lucid\/Media\/Neon-3f.mp4",
+    "title" : "Neon"
+  },
+  "perScreen" : {
+    "DISPLAY-B" : {
+      "itemID" : "nasa:abc",
+      "kind" : "image",
+      "path" : "\/tmp\/earth.jpg",
+      "title" : "Earth"
+    }
+  },
+  "userPaused" : true
+}

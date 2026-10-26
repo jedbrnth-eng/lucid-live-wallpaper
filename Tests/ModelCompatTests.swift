@@ -64,4 +64,30 @@ func registerModelCompatTests() {
         expectEqual(s.dayNight?["A"]?.day.kind, .image)
         expectEqual(s.userPaused, true)
     }
+
+    // Files written by the real 1.1.1 and 1.2.0 model code (Tests/Fixtures/compat/README.md says how they were made).
+    for v in ["1.1.1", "1.2.0"] {
+        test("Compat: \(v) library.json, playlists.json and state.json load in 1.3.0 and re-save without loss") {
+            let lib = SavedData.items(try compatFixture("\(v)-library.json"))
+            expectEqual(lib.map(\.id), ["local:Neon-123", "nasa:abc"])
+            expectEqual(lib.first?.options, nil); expectEqual(lib.first?.referenced, nil)
+            expectEqual(SavedData.items(try JSONEncoder().encode(lib)), lib, "re-save keeps every item")
+            let pls = SavedData.playlists(try compatFixture("\(v)-playlists.json"))
+            expectEqual(pls.map(\.name), ["Mix"]); expectEqual(pls.first?.items.count, 2)
+            expectEqual(pls.first?.minutes, 30); expectEqual(pls.first?.times, nil)
+            guard let st = SavedData.state(try compatFixture("\(v)-state.json")) else { expect(false, "state did not load"); return }
+            expectEqual(st.all?.itemID, "local:Neon-123")
+            expectEqual(st.perScreen["DISPLAY-B"]?.kind, .image)
+            expectEqual(st.userPaused, true)
+            expect(st.weather == nil)
+            if v == "1.2.0" {
+                expectEqual(st.perScreen["DISPLAY-C"]?.reactive, ReactiveOptions(pulse: true, glow: false, bars: true))
+                expectEqual(st.dayNight?[EngineState.allKey]?.night.itemID, "nasa:abc")
+                expectEqual(st.dayNight?[EngineState.allKey]?.dawn, nil)
+                expectEqual(st.dayNight?[EngineState.allKey]?.pick(.night, part: .dawn).itemID, "nasa:abc", "old rules behave as before")
+            }
+            let again = SavedData.state(try JSONEncoder().encode(st))
+            expectEqual(again?.all, st.all); expectEqual(again?.perScreen, st.perScreen); expectEqual(again?.dayNight, st.dayNight)
+        }
+    }
 }
