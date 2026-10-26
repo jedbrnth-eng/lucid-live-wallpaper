@@ -1,0 +1,6 @@
+# UI-free Lucid sources compiled into the unit tests (one path per line).
+Sources/Lucid/WEImport/WEProject.swift
+Sources/Lucid/Audio/AudioAnalyser.swift
+Sources/Lucid/Audio/Reactive.swift
+Sources/Lucid/WEImport/WEShim.swift
+Sources/Lucid/DayNight/SunTimes.swift
