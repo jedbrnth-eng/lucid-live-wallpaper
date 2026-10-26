@@ -43,7 +43,7 @@ struct ContentView: View {
                 }
                 Section {
                     ForEach(store.playlists) { pl in
-                        Label(pl.name, systemImage: store.activePlaylistID == pl.id ? "play.circle.fill" : "music.note.list")
+                        Label(pl.name, systemImage: store.isPlaying(pl.id) ? "play.circle.fill" : "music.note.list")
                             .badge(pl.items.count).tag(Nav.playlist(pl.id))
                     }
                     Button { newName = ""; newPlaylist = true } label: { Label("New Playlist…", systemImage: "plus") }

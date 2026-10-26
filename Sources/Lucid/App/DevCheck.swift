@@ -126,6 +126,40 @@ import AppKit
             } else { r["options_error"] = "no surface" }
             store.engine.clear(screenKey: nil)
         }
+        await playlistChecks(store, &r)
+    }
+
+    /// 5. Playlists: play two stills on all displays, check they get a window (for the cross-fade), next/previous,
+    ///    a due timer catching up, and the run surviving a reload of playback.json.
+    private static func playlistChecks(_ store: Store, _ r: inout [String: Any]) async {
+        guard let u = makePNG(.systemPink, "import-check/Second Photo.png") else { return }
+        _ = await store.importOne(u, move: false, site: nil, page: nil)
+        let items = store.library.filter { $0.title == "Good Photo" || $0.title == "Second Photo" }
+        guard items.count == 2, let main = NSScreen.screens.first else { r["playlist_error"] = "items \(items.count)"; return }
+        let p = store.createPlaylist("Check Mix")
+        var pl = p; pl.items = items; pl.shuffle = false; pl.minutes = 60
+        store.updatePlaylist(pl)
+        store.playPlaylist(p.id)
+        await wait(LucidEngine.crossfade + 0.5)
+        let first = store.engine.surfaces[main.stableKey]?.assignment.itemID
+        r["playlist_first_on_screen"] = first == items[0].id
+        r["playlist_still_has_window"] = store.engine.surfaces[main.stableKey] != nil
+        store.next()
+        await wait(LucidEngine.crossfade + 0.5)
+        r["playlist_next_on_screen"] = store.engine.surfaces[main.stableKey]?.assignment.itemID == items[1].id
+        store.previous()
+        await wait(0.3)
+        r["playlist_previous_on_screen"] = store.engine.currentAssignments.first?.itemID == items[0].id
+        store.playlistTick(now: Date().addingTimeInterval(3601))
+        await wait(0.3)
+        r["playlist_due_tick_advanced"] = store.engine.currentAssignments.first?.itemID == items[1].id
+        if let d = try? Data(contentsOf: Paths.playback) {
+            r["playlist_resume_saved"] = PlaybackState.decode(d).runs[EngineState.allKey] == store.runs[EngineState.allKey]
+        }
+        store.stopPlaylist()
+        store.engine.clear(screenKey: nil)
+        await wait(0.3)
+        r["playlist_windows_after_stop"] = store.engine.surfaces.count
     }
 
     private static func finish(_ r: [String: Any]) {

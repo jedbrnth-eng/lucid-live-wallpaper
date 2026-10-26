@@ -42,14 +42,14 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
     @Published var toast: String?
     @Published var favorites: [WallItem] = []
     @Published var playlists: [Playlist] = []
-    @Published var activePlaylistID: String? = Pref.activePlaylist
+    /// Playing playlists, one per scope (display key, or "*" for all displays). Saved in playback.json.
+    @Published private(set) var runs: [String: PlaylistRun] = [:]
     var downloadsTimer: Timer?
     var folderTimer: Timer?
     var adoptInFlight: Set<String> = []
     var watchSince: Date?
     var seenDownloads: Set<String> = []
     var pendingSizes: [String: Int] = [:]
-    private var playlistCursor = -1
     private var history: [String] = []
     private var rotateTimer: Timer?
 
@@ -63,7 +63,15 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
         live = LiveCatalog.load()
         if let d = try? Data(contentsOf: Paths.favorites) { favorites = SavedData.items(d) }
         if let d = try? Data(contentsOf: Paths.playlists) { playlists = SavedData.playlists(d) }
-        if let a = activePlaylistID, !playlists.contains(where: { $0.id == a }) { activePlaylistID = nil; Pref.activePlaylist = nil }
+        if let d = try? Data(contentsOf: Paths.playback) { runs = PlaybackState.decode(d).runs }
+        // 1.2.0 and earlier kept one playlist for all displays in a preference.
+        if runs.isEmpty, let a = Pref.activePlaylist, let p = playlists.first(where: { $0.id == a }), !p.items.isEmpty {
+            var r = PlaylistRun(playlistID: a, ids: p.items.map(\.id), shuffle: p.shuffle, now: Date())
+            if let cur = engine.state.all?.itemID, let i = r.order.firstIndex(of: cur) { r.position = i }
+            runs[EngineState.allKey] = r
+        }
+        runs = runs.filter { kv in playlists.contains { $0.id == kv.value.playlistID } }
+        syncPlaylistScopes()
         if let cur = engine.state.all?.itemID { history = [cur] }
         refreshKeys()
         for s in Source.discoverable { discover[s] = DiscoverState() }
@@ -183,20 +191,73 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
     func updatePlaylist(_ p: Playlist) {
         guard let i = playlists.firstIndex(where: { $0.id == p.id }) else { return }
         playlists[i] = p; savePlaylists()
-        if activePlaylistID == p.id { scheduleRotation() }
+        var rng = SystemRandomNumberGenerator()
+        for (scope, var r) in runs where r.playlistID == p.id {
+            let before = r.current
+            r.reconcile(ids: p.items.map(\.id), shuffle: p.shuffle, rng: &rng)
+            runs[scope] = r
+            if r.current == nil { runs[scope] = nil } else if r.current != before { show(scope) }
+        }
+        saveRuns()
     }
     func deletePlaylist(_ pid: String) {
-        if activePlaylistID == pid { stopPlaylist() }
+        stopPlaylist(pid)
         playlists.removeAll { $0.id == pid }; savePlaylists()
     }
+    /// The playlist playing on all displays (the one the menu bar and toolbar talk about).
+    var activePlaylistID: String? { runs[EngineState.allKey]?.playlistID ?? runs.values.first?.playlistID }
     var activePlaylist: Playlist? { playlists.first { $0.id == activePlaylistID } }
-    func playPlaylist(_ pid: String) {
-        guard let p = playlists.first(where: { $0.id == pid }), !p.items.isEmpty else { flash("Add some wallpapers to this playlist first"); return }
-        activePlaylistID = pid; Pref.activePlaylist = pid; playlistCursor = -1
-        next(); scheduleRotation()
-        flash("Playing “\(p.name)” · \(p.shuffle ? "shuffle" : "in order") · every \(Self.intervalLabel(p.minutes))")
+    func isPlaying(_ pid: String) -> Bool { runs.values.contains { $0.playlistID == pid } }
+    /// Where a playlist is playing, for display: "All displays" or display names.
+    func playingWhere(_ pid: String) -> String {
+        let scopes = runs.filter { $0.value.playlistID == pid }.map(\.key)
+        if scopes.contains(EngineState.allKey) { return "all displays" }
+        return scopes.map { k in NSScreen.screens.first { $0.stableKey == k }?.localizedName ?? "a disconnected display" }.sorted().joined(separator: ", ")
     }
-    func stopPlaylist() { activePlaylistID = nil; Pref.activePlaylist = nil; scheduleRotation() }
+
+    /// Start a playlist on every display (screenKey nil) or on one display.
+    func playPlaylist(_ pid: String, screenKey: String? = nil) {
+        guard let p = playlists.first(where: { $0.id == pid }), !p.items.isEmpty else { flash("Add some wallpapers to this playlist first"); return }
+        let scope = screenKey ?? EngineState.allKey
+        if screenKey == nil { runs = [:] }   // "all displays" replaces every per-display playlist, like setting one wallpaper for all
+        runs[scope] = PlaylistRun(playlistID: pid, ids: p.items.map(\.id), shuffle: p.shuffle, now: Date())
+        saveRuns(); syncPlaylistScopes()
+        show(scope)
+        let when = PlaylistScheduler.sanitize(p.times).isEmpty ? "every \(Self.intervalLabel(p.minutes))" : "at set times"
+        flash("Playing “\(p.name)” · \(p.shuffle ? "shuffle" : "in order") · \(when)")
+    }
+    /// Stop one playlist everywhere, or (nil) every playlist.
+    func stopPlaylist(_ pid: String? = nil) {
+        runs = runs.filter { pid != nil && $0.value.playlistID != pid }
+        saveRuns(); syncPlaylistScopes()
+    }
+    private func saveRuns() {
+        if let d = try? JSONEncoder().encode(PlaybackState(runs: runs)) { try? d.write(to: Paths.playback, options: .atomic) }
+        Pref.activePlaylist = runs[EngineState.allKey]?.playlistID
+    }
+    private func syncPlaylistScopes() { engine.crossfadeScopes = Set(runs.keys); scheduleRotation() }
+
+    /// Put a run's current item on its scope.
+    private func show(_ scope: String) {
+        guard let r = runs[scope], let id = r.current, let p = playlists.first(where: { $0.id == r.playlistID }),
+              let it = p.items.first(where: { $0.id == id }) else { return }
+        let others = Set(runs.keys).subtracting([EngineState.allKey])
+        setWallpaper(libraryItem(it.id) ?? it, screenKey: scope == EngineState.allKey ? nil : scope, keepScreens: others)
+    }
+    private func step(_ scope: String, forward: Bool) {
+        guard var r = runs[scope], let p = playlists.first(where: { $0.id == r.playlistID }) else { return }
+        var rng = SystemRandomNumberGenerator()
+        if forward { r.advance(ids: p.items.map(\.id), shuffle: p.shuffle, now: Date(), rng: &rng) } else { r.back(); r.changedAt = Date() }
+        runs[scope] = r; saveRuns()
+        show(scope)
+    }
+    /// Every 30 s: advance any playlist whose next change is due (also catches up after sleep or a relaunch).
+    func playlistTick(now: Date = Date()) {
+        for (scope, r) in runs {
+            guard let p = playlists.first(where: { $0.id == r.playlistID }) else { continue }
+            if PlaylistScheduler.isDue(r, minutes: p.minutes, times: p.times, timeZone: .current, now: now) { step(scope, forward: true) }
+        }
+    }
     static func intervalLabel(_ m: Int) -> String {
         m < 60 ? "\(m) min" : m < 1440 ? "\(m / 60) h" : "day"
     }
@@ -245,9 +306,9 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
     }
 
     // Applying
-    func setWallpaper(_ item: WallItem, screenKey: String? = nil) {
+    func setWallpaper(_ item: WallItem, screenKey: String? = nil, keepScreens: Set<String> = []) {
         if let lib = libraryItem(item.id), lib.isLocalReady, let p = lib.localPath {
-            engine.apply(Assignment(itemID: lib.id, title: lib.title, path: p, kind: lib.kind, options: lib.options), screenKey: screenKey)
+            engine.apply(Assignment(itemID: lib.id, title: lib.title, path: p, kind: lib.kind, options: lib.options), screenKey: screenKey, keepScreens: keepScreens)
             didApply(lib.id)
             flash("Wallpaper set: \(lib.title)")
             return
@@ -258,7 +319,7 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
                 it.thumbPath = await Media.thumbnail(p, .video, id: it.id)
                 it.addedAt = Date()
                 addToLibrary(it)
-                engine.apply(Assignment(itemID: it.id, title: it.title, path: p, kind: .video), screenKey: screenKey)
+                engine.apply(Assignment(itemID: it.id, title: it.title, path: p, kind: .video), screenKey: screenKey, keepScreens: keepScreens)
                 didApply(it.id)
                 flash("Wallpaper set: \(it.title)")
             }
@@ -269,7 +330,7 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
             guard let self else { return }
             self.addToLibrary(done)
             if let p = done.localPath {
-                self.engine.apply(Assignment(itemID: done.id, title: done.title, path: p, kind: done.kind), screenKey: screenKey)
+                self.engine.apply(Assignment(itemID: done.id, title: done.title, path: p, kind: done.kind), screenKey: screenKey, keepScreens: keepScreens)
                 self.didApply(done.id)
                 self.flash("Wallpaper set: \(done.title)")
             }
@@ -415,32 +476,30 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
 
     // Rotation / next
     func next() {
+        if !runs.isEmpty { for k in runs.keys.sorted() { step(k, forward: true) }; return }
         let cur = engine.state.all?.itemID
-        if let p = activePlaylist, !p.items.isEmpty {
-            let idx: Int
-            if p.shuffle {
-                let others = p.items.indices.filter { p.items[$0].id != cur }
-                idx = others.randomElement() ?? 0
-            } else { idx = (playlistCursor + 1) % p.items.count }
-            playlistCursor = idx
-            let it = p.items[idx]
-            setWallpaper(libraryItem(it.id) ?? it)
-            return
-        }
         let pool = library.filter { $0.isLocalReady && $0.id != cur }
         guard let pick = pool.randomElement() else { flash("Add more wallpapers to your library first"); return }
         setWallpaper(pick)
     }
     func previous() {
+        if !runs.isEmpty { for k in runs.keys.sorted() { step(k, forward: false) }; return }
         guard history.count >= 2 else { flash("No previous wallpaper yet"); return }
         history.removeLast()
         let id = history.removeLast()
         guard let it = findItem(id) else { flash("Previous wallpaper is no longer available"); return }
         setWallpaper(it)
     }
+    /// Playlists are checked every 30 s; without one, the Settings auto-change timer picks a random library item.
     func scheduleRotation() {
         rotateTimer?.invalidate(); rotateTimer = nil
-        let m = activePlaylist?.minutes ?? Pref.rotateMinutes
+        if !runs.isEmpty {
+            rotateTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
+                MainActor.assumeIsolated { self?.playlistTick() } }
+            playlistTick()
+            return
+        }
+        let m = Pref.rotateMinutes
         guard m > 0 else { return }
         rotateTimer = Timer.scheduledTimer(withTimeInterval: Double(m) * 60, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.next() } }

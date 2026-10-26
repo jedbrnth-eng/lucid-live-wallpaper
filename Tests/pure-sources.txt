@@ -5,3 +5,4 @@ Sources/Lucid/DayNight/SunTimes.swift
 Sources/Lucid/Core/Models.swift
 Sources/Lucid/Engine/PausePolicy.swift
 Sources/Lucid/Media/ImportPolicy.swift
+Sources/Lucid/Store/PlaylistScheduler.swift

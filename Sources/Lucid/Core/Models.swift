@@ -179,6 +179,7 @@ struct Playlist: Codable, Identifiable, Hashable {
     var items: [WallItem] = []
     var shuffle = true
     var minutes = 60
+    var times: [Int]?   // optional: change at these minutes after local midnight instead of every `minutes` (1.3.0+)
 }
 
 // MARK: - Loading saved data (library.json, favorites.json, playlists.json, state.json)
@@ -229,6 +230,7 @@ extension Playlist {
         items = try c.decode(LossyArray<WallItem>.self, forKey: .items).values
         shuffle = try c.decode(Bool.self, forKey: .shuffle)
         minutes = try c.decode(Int.self, forKey: .minutes)
+        times = (try? c.decodeIfPresent([Int].self, forKey: .times)) ?? nil
     }
 }
 

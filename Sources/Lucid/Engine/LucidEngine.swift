@@ -82,9 +82,14 @@ import ImageIO
 
     // MARK: Changing assignments
 
-    func apply(_ a: Assignment, screenKey: String?) {
+    /// `keepScreens`: displays that keep their own wallpaper when one is set for all (per-display playlists).
+    func apply(_ a: Assignment, screenKey: String?, keepScreens: Set<String> = []) {
         if let k = screenKey { state.perScreen[k] = a; state.dayNight?[k] = nil }
-        else { state.all = a; state.perScreen = [:]; state.dayNight = nil }
+        else {
+            state.all = a
+            state.perScreen = state.perScreen.filter { keepScreens.contains($0.key) }
+            state.dayNight = keepScreens.isEmpty ? nil : state.dayNight?.filter { keepScreens.contains($0.key) }
+        }
         state.userPaused = false
         save()
         refresh()
@@ -186,8 +191,13 @@ import ImageIO
     private func needsSurface(_ a: Assignment, _ screen: NSScreen) -> Bool {
         switch a.kind {
         case .video: return true
-        case .image: return (a.reactive?.any ?? false) || rule(for: screen) != nil
+        case .image: return (a.reactive?.any ?? false) || rule(for: screen) != nil || playlistGoverns(screen)
         }
+    }
+    /// Scopes ("*" or display keys) with a playing playlist: their stills get a window too, so changes cross-fade.
+    var crossfadeScopes: Set<String> = [] { didSet { if crossfadeScopes != oldValue { refresh() } } }
+    private func playlistGoverns(_ screen: NSScreen) -> Bool {
+        crossfadeScopes.contains(screen.stableKey) || (crossfadeScopes.contains(EngineState.allKey) && state.perScreen[screen.stableKey] == nil)
     }
 
     func refresh() {
