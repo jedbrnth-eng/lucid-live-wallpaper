@@ -15,15 +15,16 @@ import ImageIO
 
 // MARK: - Views
 
-enum Nav: Hashable { case discover(Source), library(LibFilter), favorites, recents, playlist(String), displays, settings }
+enum Nav: Hashable { case home, discover(Source), liveTheme(String), library(LibFilter), favorites, recents, playlist(String), displays, settings }
 
-let accent = Color(red: 0.0, green: 0.94, blue: 1.0)
-let accent2 = Color(red: 1.0, green: 0.17, blue: 0.84)
+/// Highlight colours, the same cyan and pink as the website (see Theme).
+let accent = Theme.cyan
+let accent2 = Theme.pink
 
 struct ContentView: View {
     @EnvironmentObject var store: Store
     @EnvironmentObject var engine: LucidEngine
-    @State private var nav: Nav? = .discover(.aerials)
+    @State private var nav: Nav? = .home
     @State private var newPlaylist = false
     @State private var newName = ""
     @State private var droppingAny = false
@@ -31,6 +32,7 @@ struct ContentView: View {
     var body: some View {
         NavigationSplitView {
             List(selection: $nav) {
+                Label("Home", systemImage: "house").tag(Nav.home)
                 Section("Discover · 4K only") {
                     ForEach(Source.discoverable) { s in
                         Label(s.label, systemImage: s.icon).tag(Nav.discover(s))
@@ -63,7 +65,9 @@ struct ContentView: View {
             .safeAreaInset(edge: .bottom) { NowPlayingBar().padding(10) }
         } detail: {
             Group {
-                switch nav ?? .discover(.aerials) {
+                switch nav ?? .home {
+                case .home: AnyView(HomeView(go: { nav = $0 }))
+                case .liveTheme(let t): AnyView(LiveView(initialTheme: t).id(t))
                 case .discover(let s): s == .aerials ? AnyView(AerialsView()) : s == .live ? AnyView(LiveView()) : AnyView(DiscoverView(source: s).id(s))
                 case .library: AnyView(LibraryView(mode: .downloaded))
                 case .favorites: AnyView(LibraryView(mode: .favorites))
@@ -76,8 +80,8 @@ struct ContentView: View {
             .overlay {
                 if droppingAny {
                     ZStack {
-                        RoundedRectangle(cornerRadius: 18).fill(Color.black.opacity(0.55))
-                        RoundedRectangle(cornerRadius: 18).stroke(accent, style: StrokeStyle(lineWidth: 3, dash: [12]))
+                        RoundedRectangle(cornerRadius: 22, style: .continuous).fill(Theme.bg.opacity(0.75))
+                        RoundedRectangle(cornerRadius: 22, style: .continuous).stroke(accent, style: StrokeStyle(lineWidth: 3, dash: [12]))
                         VStack(spacing: 8) {
                             Image(systemName: "square.and.arrow.down.on.square").font(.system(size: 46)).foregroundStyle(accent)
                             Text("Drop to add to your library").font(.title2.bold())
@@ -86,16 +90,19 @@ struct ContentView: View {
                     }.padding(10).allowsHitTesting(false)
                 }
             }
+            .background(Theme.backdrop.ignoresSafeArea())
             .dropDestination(for: URL.self) { urls, _ in store.importFiles(urls); return !urls.isEmpty } isTargeted: { droppingAny = $0 }
             .overlay(alignment: .bottom) {
                 if let t = store.toast {
-                    Text(t).font(.callout.weight(.medium)).padding(.horizontal, 16).padding(.vertical, 10)
-                        .background(.ultraThinMaterial, in: Capsule()).overlay(Capsule().stroke(accent.opacity(0.5)))
+                    Text(t).font(.callout.weight(.medium)).foregroundStyle(Theme.ink).padding(.horizontal, 16).padding(.vertical, 10)
+                        .background(.ultraThinMaterial, in: Capsule()).overlay(Capsule().stroke(Theme.line))
+                        .shadow(color: Theme.violet.opacity(0.35), radius: 14)
                         .padding(.bottom, 18).transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
             .animation(.spring(duration: 0.3), value: store.toast)
         }
+        .onAppear { PreviewCenter.shared.attach(engine) }
     }
 }
 
@@ -127,6 +134,7 @@ struct NowPlayingBar: View {
             .disabled(title == nil)
         }
         .padding(10)
-        .background(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.06)))
+        .background(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous).fill(Theme.surface))
+        .overlay(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous).stroke(Theme.line))
     }
 }

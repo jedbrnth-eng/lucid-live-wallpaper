@@ -413,6 +413,35 @@ def stage(name, make):
     return got
 
 
+# Hand-picked clips for the app's Home page ("Featured" row and hero), in display order. This is a curated choice,
+# not a popularity number: Lucid collects no usage data. Ids that drop out of the catalog are simply skipped.
+FEATURED = [
+    "esawebb:weic2216d",      # Zoom into Webb's view of the Pillars of Creation
+    "commons:52040283",       # Aurora time-lapse, Saguenay
+    "esahubble:heic1914b",    # Zooming into Jupiter's Great Red Spot
+    "commons:135050444",      # Sunset on Half Dome time-lapse, Yosemite
+    "esawebb:weic2517b",      # Butterfly Nebula pull-out
+    "commons:141534644",      # Aerial views of Chat Mami beach, Tunisia
+    "esahubble:heic1808c",    # Diving into the Lagoon Nebula
+    "commons:127484784",      # Sydney Harbour time-lapse
+    "eso:paranaltimelapse12r",  # Paranal night-sky time-lapse
+    "commons:178537174",      # 2024 total eclipse time-lapse
+]
+
+
+def mark_featured(items, featured=FEATURED):
+    """Set "featured": true on the curated clips (and nowhere else). Returns the ids that were found."""
+    want = set(featured)
+    found = []
+    for it in items:
+        if it["id"] in want:
+            it["featured"] = True
+            found.append(it["id"])
+        else:
+            it.pop("featured", None)
+    return [i for i in featured if i in found]
+
+
 def main():
     if not os.path.exists(FFPROBE):
         sys.exit("ffprobe not found (brew install ffmpeg)")
@@ -446,6 +475,7 @@ def main():
             continue
         seen.add(it["url"]); seen.add(k)
         final.append(it)
+    log(f"featured: {len(mark_featured(final))} of {len(FEATURED)} curated clips present")
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     tmp = OUT + ".tmp"
     with open(tmp, "w") as f:

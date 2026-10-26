@@ -31,6 +31,7 @@ enum Paths {
     static let playlists = support.appendingPathComponent("playlists.json")
     static let playback = support.appendingPathComponent("playback.json")
     static let weather = support.appendingPathComponent("weather.json")
+    static let usage = support.appendingPathComponent("usage.json")   // local apply counts for Home "Most used" (1.3.0+)
     static let aerialsRoot = URL(fileURLWithPath: "/Library/Application Support/com.apple.idleassetsd/Customer")
 
     static func make(_ u: URL) -> URL {

@@ -10,6 +10,7 @@
 // Never starts audio capture and never changes the real desktop picture.
 import SwiftUI
 import AppKit
+import AVFoundation
 
 @MainActor enum DevCheck {
     private static func wait(_ s: Double) async { try? await Task.sleep(nanoseconds: UInt64(s * 1_000_000_000)) }
@@ -92,6 +93,7 @@ import AppKit
             r["windows_after_clear"] = engine.surfaces.count
         }
         await importChecks(store, &r)
+        await homeChecks(store, &r)
         renderViews(store, &r)
         await weatherChecks(store, &r)
         await reviewChecks(store, &r)
@@ -319,6 +321,46 @@ import AppKit
         r["review_l1_location_cleared_when_off"] = Pref.lastLocation == nil
     }
 
+    /// 10. Home and live previews: rows/hero from the real catalog, the local usage counter (written to usage.json,
+    ///     read back leniently), the player limit, and (with LUCID_CHECK_VIDEO) making a small preview copy.
+    private static func homeChecks(_ store: Store, _ r: inout [String: Any]) async {
+        let input = store.homeInput()
+        r["home_rows"] = HomeBuilder.rows(input).map { "\($0.title) (\($0.items.count))" }
+        r["home_hero"] = HomeBuilder.hero(input)?.title ?? NSNull()
+        r["home_featured_ids"] = store.featuredIDs.count
+        r["usage_entries"] = store.usage.counts.count
+        r["usage_max_count"] = store.usage.counts.values.max() ?? 0
+        r["usage_file_reads_back"] = (try? Data(contentsOf: Paths.usage)).map { UsageLog.decode($0) == store.usage } ?? false
+        // The check runs in the background, so the real center must refuse to play (window not frontmost).
+        PreviewCenter.shared.refresh()
+        r["preview_allowed_in_background"] = PreviewCenter.shared.allowed
+        r["preview_background_request_granted"] = PreviewCenter.shared.request("check-bg")
+        PreviewCenter.shared.release("check-bg")
+        // The player limit, on a center that isn't gated by the window.
+        let c = PreviewCenter()
+        let tokens = (0..<6).map { "check-\($0)" }
+        c.request("check-pin", pinned: true)
+        tokens.forEach { c.request($0) }
+        r["preview_players_after_6_hovers"] = c.activeCount
+        r["preview_pinned_kept"] = c.active.contains("check-pin")
+        (tokens + ["check-pin"]).forEach { c.release($0) }
+        r["preview_players_after_release"] = c.activeCount
+        if let v = ProcessInfo.processInfo.environment["LUCID_CHECK_VIDEO"] {
+            let t = Date()
+            let u = await PreviewRenditions.shared.url(source: v, id: "check-video", size: .small)
+            r["preview_copy_seconds"] = (Date().timeIntervalSince(t) * 10).rounded() / 10
+            if let u {
+                let a = AVURLAsset(url: u)
+                let size = (try? await a.loadTracks(withMediaType: .video).first?.load(.naturalSize)) ?? .zero
+                r["preview_copy_size"] = "\(Int(size.width))x\(Int(size.height))"
+                r["preview_copy_bytes"] = (try? FileManager.default.attributesOfItem(atPath: u.path)[.size] as? Int) ?? -1
+                r["preview_copy_seconds_long"] = ((try? await a.load(.duration))?.seconds ?? 0).rounded()
+                r["preview_copy_has_audio"] = !((try? await a.loadTracks(withMediaType: .audio)) ?? []).isEmpty
+                r["preview_copy_inside_support"] = ImportPolicy.isContained(u.path, in: Paths.support.path)
+            } else { r["preview_copy_size"] = "failed" }
+        }
+    }
+
     /// 8. Render every screen of the app off-screen with the shared environment, so a view that reads an
     ///    environment object nobody provides crashes here (in the check) instead of in front of a user.
     private static func renderViews(_ store: Store, _ r: inout [String: Any]) {
@@ -334,6 +376,8 @@ import AppKit
         r["render_displays"] = render("displays", DisplaysView())
         r["render_menu"] = render("menu", VStack { MenuContent() })
         r["render_library"] = render("library", LibraryView(mode: .downloaded))
+        r["render_home"] = render("home", HomeView())
+        r["render_live_theme"] = render("live-theme", LiveView(initialTheme: "Space"))
         if let it = store.library.first { r["render_detail"] = render("detail", DetailView(item: it)) }
         if let w = NSScreen.screens.first {
             r["render_weather_sheet"] = render("weather", WeatherSheet(target: DNTarget(screenKey: nil, name: w.localizedName)))
@@ -378,6 +422,8 @@ import AppKit
         if let p = store.playlists.first { shot("playlist", PlaylistView(id: p.id), width: 1100, height: 520) }
         if let it = store.library.first(where: { $0.kind == .video }) ?? store.library.first { shot("detail-options", DetailView(item: it), width: 820) }
         shot("library", LibraryView(mode: .downloaded), width: 1100, height: 700)
+        shot("home", HomeView().background(Theme.backdrop), width: 1100, height: 1500)
+        if let it = HomeBuilder.hero(store.homeInput()) { shot("detail-hero", DetailView(item: it), width: 820) }
         shot("menu-bar-menu", VStack(alignment: .leading, spacing: 6) { MenuContent() }.padding(12), width: 360)
     }
 

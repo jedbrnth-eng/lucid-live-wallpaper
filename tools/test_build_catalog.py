@@ -26,6 +26,11 @@ class CatalogTests(unittest.TestCase):
                 mock.patch.object(b, "head_size", return_value=123):
             return b.dj_item("esawebb", "x1")
 
+    def test_mark_featured_flags_only_curated_ids_in_order(self):
+        items = [{"id": "a"}, {"id": "b", "featured": True}, {"id": "c"}]
+        self.assertEqual(b.mark_featured(items, ["c", "a", "gone"]), ["c", "a"])
+        self.assertEqual([i.get("featured") for i in items], [True, None, True])
+
     def test_full_credit_never_truncated(self):
         it = self.item()
         self.assertIn("G. Seventh", it["credit"])

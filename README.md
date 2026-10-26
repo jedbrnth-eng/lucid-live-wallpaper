@@ -89,6 +89,10 @@ rm -rf /Applications/Lucid.app "$HOME/Library/Application Support/Lucid"
 ## Take a look
 
 <p align="center">
+  <img src="docs/screenshot-home.jpg" alt="Lucid's Home page: a featured wallpaper playing above rows of wallpapers" width="860">
+</p>
+
+<p align="center">
   <img src="docs/screenshot.png" alt="Lucid showing the Apple Aerials catalog" width="860">
 </p>
 
@@ -101,6 +105,8 @@ rm -rf /Applications/Lucid.app "$HOME/Library/Application Support/Lucid"
 
 | Feature | |
 |---|---|
+| **Home** | A featured wallpaper that plays, then rows to scroll sideways: recently used, most used (counted only on your Mac), hand-picked featured clips, favorites, new, and one row per category. |
+| **Live previews** | Hover a card and the clip plays, muted, so you see it as it will look. Only clips already on your Mac, from a small cached copy; at most 3 play at once, and all stop when Lucid is in the background or your Mac is saving power. Reduce Motion shows still posters. |
 | **Live 4K catalog** | About 590 curated moving wallpapers from ESA/Webb, ESA/Hubble, ESO, NASA and Wikimedia Commons. Browse by category (Space, Nature & Landscapes, Ocean & Beaches, Sky & Time-lapse, Cities). Every clip is verified at 3840×2160 or larger and turned into a seamless loop. |
 | **Apple Aerials** | Apple's own 4K aerial films. The ones already on your Mac apply instantly; others download from Apple when you pick them. |
 | **Stills** | NASA 4K Space and Wikimedia 4K Photos, with the license shown on every item. |
@@ -117,7 +123,7 @@ rm -rf /Applications/Lucid.app "$HOME/Library/Application Support/Lucid"
 ## Use it
 
 1. Open Lucid. It also lives in your menu bar.
-2. In **Discover**, hover a wallpaper and click **Apply**.
+2. On **Home** (or in **Discover**), hover a wallpaper to preview it and click **Apply**.
 3. Have more than one screen? Open a wallpaper and use **Set on Display**.
 
 ## Bring your own
@@ -222,6 +228,7 @@ No account, no analytics, no telemetry.
 - **Location** (off by default, Day & Night): used to work out sunrise and sunset and stored rounded to about 1 km on your Mac. It is not sent anywhere, except that if you also turn on Weather wallpapers, a further rounded version (about 10 km) goes to Open-Meteo.
 - **Weather** (off by default): one HTTPS request to Open-Meteo at most every 30 minutes, with only rounded coordinates. Without location permission, the coordinates come from your time zone's city.
 - **Update check** (off by default, Settings → General): one anonymous HTTPS request a day to GitHub's public releases API. If a newer version exists, Settings shows a link to its release page. Nothing is downloaded or installed automatically.
+- **Most used** on the Home page: a count of how often you chose each wallpaper, saved in `usage.json` in Lucid's folder. It is never sent anywhere. Previews are made from files already on your Mac and cached in Lucid's `Previews` folder.
 - Otherwise the app only contacts the content sources above (NASA, ESA, ESO, Wikimedia Commons, Apple's servers for Aerial films you choose, and Pixabay if you add a key) to browse and download what you choose.
 
 Security notes and the threat model: [docs/security-review.md](docs/security-review.md).
@@ -229,7 +236,7 @@ Security notes and the threat model: [docs/security-review.md](docs/security-rev
 ## Test
 
 ```
-./test.sh                                          # unit tests (offline): pausing, import rules, playlists, shortcuts, sun/twilight, weather, update check, saved data
+./test.sh                                          # unit tests (offline): pausing, import rules, playlists, shortcuts, sun/twilight, weather, update check, saved data, Home rows, usage counter, preview limits
 ./selftest.sh                                      # every source returns only ≥3840×2160 items
 python3 -m unittest tools/test_build_catalog.py    # offline catalog-builder tests
 python3 tools/build_catalog.py catalog.json        # rebuild the Live 4K catalog (slow)

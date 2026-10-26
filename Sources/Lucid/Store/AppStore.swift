@@ -42,6 +42,10 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
     @Published var keysPresent: Set<KeyName> = []
     @Published var toast: String?
     @Published var favorites: [WallItem] = []
+    /// Hand-picked catalog clips for Home (catalog.json `featured`), in curated order.
+    @Published var featuredIDs: [String] = []
+    /// How often each wallpaper was chosen (Home "Most used"). Local only: usage.json, never sent anywhere.
+    @Published private(set) var usage = UsageLog()
     @Published var playlists: [Playlist] = []
     /// Playing playlists, one per scope (display key, or "*" for all displays). Saved in playback.json.
     @Published private(set) var runs: [String: PlaylistRun] = [:]
@@ -63,7 +67,8 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
         weather = WeatherService(engine: e)
         if let d = try? Data(contentsOf: Paths.library) { library = SavedData.items(d) }
         aerials = Providers.aerials()
-        live = LiveCatalog.load()
+        (live, featuredIDs) = LiveCatalog.loadAll()
+        if let d = try? Data(contentsOf: Paths.usage) { usage = UsageLog.decode(d) }
         if let d = try? Data(contentsOf: Paths.favorites) { favorites = SavedData.items(d) }
         if let d = try? Data(contentsOf: Paths.playlists) { playlists = SavedData.playlists(d) }
         if let d = try? Data(contentsOf: Paths.playback) { runs = PlaybackState.decode(d).runs }
@@ -130,6 +135,8 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
         if let t = it.thumbPath, ImportPolicy.isSafeToDelete(t, inside: Paths.thumbs) { try? FileManager.default.removeItem(atPath: t) }
         library.removeAll { $0.id == item.id }
         saveLibrary()
+        usage.forget(item.id); saveUsage()
+        PreviewRenditions.forget(id: item.id)
         flash("Removed “\(it.title)”")
     }
 
@@ -246,7 +253,7 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
         var keep = Set(runs.keys)
         if scope == EngineState.allKey && !starting { keep.formUnion(engine.state.perScreen.keys); keep.formUnion((engine.state.dayNight ?? [:]).keys) }
         keep.remove(EngineState.allKey)
-        setWallpaper(libraryItem(it.id) ?? it, screenKey: scope == EngineState.allKey ? nil : scope, keepScreens: keep)
+        setWallpaper(libraryItem(it.id) ?? it, screenKey: scope == EngineState.allKey ? nil : scope, keepScreens: keep, chosen: false)
     }
     private func step(_ scope: String, forward: Bool) {
         guard var r = runs[scope], let p = playlists.first(where: { $0.id == r.playlistID }) else { return }
@@ -267,9 +274,19 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
     }
 
 
-    private func didApply(_ id: String) {
+    /// `chosen` = the user picked this wallpaper (counts for Home "Most used"); playlist steps and shuffles don't.
+    private func didApply(_ id: String, chosen: Bool = true) {
         if let i = library.firstIndex(where: { $0.id == id }) { library[i].lastAppliedAt = Date(); saveLibrary() }
+        if chosen { usage.record(id); saveUsage() }
         if history.last != id { history.append(id); if history.count > 60 { history.removeFirst() } }
+    }
+
+    private func saveUsage() { if let d = usage.encoded() { try? d.write(to: Paths.usage, options: .atomic) } }
+
+    /// Everything the Home page needs, as plain data (see HomeBuilder).
+    func homeInput(now: Date = Date()) -> HomeInput {
+        HomeInput(library: library, live: live, aerials: aerials, favorites: favorites, usage: usage, featuredIDs: featuredIDs,
+                  themes: LiveCatalog.themes, now: now, isReady: \.isLocalReady, theme: LiveCatalog.theme)
     }
 
     func flash(_ s: String) {
@@ -310,10 +327,10 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
     }
 
     // Applying
-    func setWallpaper(_ item: WallItem, screenKey: String? = nil, keepScreens: Set<String> = []) {
+    func setWallpaper(_ item: WallItem, screenKey: String? = nil, keepScreens: Set<String> = [], chosen: Bool = true) {
         if let lib = libraryItem(item.id), lib.isLocalReady, let p = lib.localPath {
             engine.apply(Assignment(itemID: lib.id, title: lib.title, path: p, kind: lib.kind, options: lib.options), screenKey: screenKey, keepScreens: keepScreens)
-            didApply(lib.id)
+            didApply(lib.id, chosen: chosen)
             flash("Wallpaper set: \(lib.title)")
             return
         }
@@ -324,7 +341,7 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
                 it.addedAt = Date()
                 addToLibrary(it)
                 engine.apply(Assignment(itemID: it.id, title: it.title, path: p, kind: .video), screenKey: screenKey, keepScreens: keepScreens)
-                didApply(it.id)
+                didApply(it.id, chosen: chosen)
                 flash("Wallpaper set: \(it.title)")
             }
             return
@@ -335,7 +352,7 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
             self.addToLibrary(done)
             if let p = done.localPath {
                 self.engine.apply(Assignment(itemID: done.id, title: done.title, path: p, kind: done.kind), screenKey: screenKey, keepScreens: keepScreens)
-                self.didApply(done.id)
+                self.didApply(done.id, chosen: chosen)
                 self.flash("Wallpaper set: \(done.title)")
             }
         }
@@ -509,7 +526,7 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
         let cur = engine.state.all?.itemID
         let pool = library.filter { $0.isLocalReady && $0.id != cur }
         guard let pick = pool.randomElement() else { flash("Add more wallpapers to your library first"); return }
-        setWallpaper(pick)
+        setWallpaper(pick, chosen: false)
     }
     func previous() {
         if !runs.isEmpty { for k in runs.keys.sorted() { step(k, forward: false) }; return }
@@ -517,7 +534,7 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
         history.removeLast()
         let id = history.removeLast()
         guard let it = findItem(id) else { flash("Previous wallpaper is no longer available"); return }
-        setWallpaper(it)
+        setWallpaper(it, chosen: false)
     }
     /// Playlists are checked every 30 s; without one, the Settings auto-change timer picks a random library item.
     func scheduleRotation() {
