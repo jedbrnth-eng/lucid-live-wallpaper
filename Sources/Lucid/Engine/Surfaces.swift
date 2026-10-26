@@ -50,6 +50,9 @@ final class SurfaceHostView: NSView {
     let barsLayer = CAShapeLayer()
     let dimLayer = CALayer()
     private var lastBars: [Float] = []
+    /// Per-wallpaper fit and crop focus (nil fields = app-wide setting) and the media's pixel size once known.
+    var options = WallpaperOptions() { didSet { applyLook() } }
+    var mediaSize: CGSize? { didSet { needsLayout = true } }
 
     init(content: CALayer) {
         contentLayer = content
@@ -78,19 +81,35 @@ final class SurfaceHostView: NSView {
         super.layout()
         CATransaction.begin(); CATransaction.setDisableActions(true)
         // bounds + position (not frame) so the pulse transform scales around the centre.
-        contentLayer.bounds = bounds
-        contentLayer.position = CGPoint(x: bounds.midX, y: bounds.midY)
+        let r = contentFrame()
+        contentLayer.bounds = CGRect(origin: .zero, size: r.size)
+        contentLayer.position = CGPoint(x: r.midX, y: r.midY)
         glowLayer.frame = bounds; barsLayer.frame = bounds; dimLayer.frame = bounds
         CATransaction.commit()
         if !lastBars.isEmpty { drawBars(lastBars) }
     }
 
+    /// Where the media sits: computed from its size (fill with crop focus, fit, stretch) once known, else the whole screen.
+    private func contentFrame() -> CGRect {
+        guard let m = mediaSize, m.width > 0, m.height > 0 else { return bounds }
+        let f = FillLayout.frame(media: (Double(m.width), Double(m.height)), bounds: (Double(bounds.width), Double(bounds.height)),
+                                 mode: options.effectiveFit(defaultFill: Pref.fillScreen), focusX: options.focusX ?? 0.5, focusY: options.focusY ?? 0.5)
+        return CGRect(x: f.x, y: f.y, width: f.w, height: f.h)
+    }
+
     func applyLook() {
         CATransaction.begin(); CATransaction.setDisableActions(true)
-        if let p = contentLayer as? AVPlayerLayer { p.videoGravity = Pref.fillScreen ? .resizeAspectFill : .resizeAspect }
-        else { contentLayer.contentsGravity = Pref.fillScreen ? .resizeAspectFill : .resizeAspect }
+        let fit = options.effectiveFit(defaultFill: Pref.fillScreen)
+        // With a known media size the frame already has the right aspect, so the layer just fills it.
+        let known = (mediaSize?.width ?? 0) > 0
+        if let p = contentLayer as? AVPlayerLayer {
+            p.videoGravity = known || fit == .stretch ? .resize : fit == .fill ? .resizeAspectFill : .resizeAspect
+        } else {
+            contentLayer.contentsGravity = known || fit == .stretch ? .resize : fit == .fill ? .resizeAspectFill : .resizeAspect
+        }
         dimLayer.opacity = Float(min(0.8, max(0, Pref.dim)))
         CATransaction.commit()
+        needsLayout = true
     }
 
     func applyReactive(_ look: ReactiveLook) {
@@ -143,21 +162,30 @@ final class SurfaceHostView: NSView {
             let item = AVPlayerItem(url: URL(fileURLWithPath: assignment.path))
             item.preferredForwardBufferDuration = 2
             looper = AVPlayerLooper(player: p, templateItem: item)
-            p.defaultRate = Float(Pref.speed)
+            p.defaultRate = speed
             player = p
             let l = AVPlayerLayer(); l.player = p
             host = SurfaceHostView(content: l)
             window.contentView = host
+            let path = assignment.path
+            Task { [weak self] in
+                if let d = await Media.dims(path, .video) { self?.host?.mediaSize = CGSize(width: d.0, height: d.1) }
+            }
         case .image:
             let l = CALayer()
             let maxPixels = max(screen.frame.width, screen.frame.height) * screen.backingScaleFactor
-            l.contents = Self.loadImage(assignment.path, maxPixels: maxPixels)
+            let img = Self.loadImage(assignment.path, maxPixels: maxPixels)
+            l.contents = img
             host = SurfaceHostView(content: l)
+            if let img { host?.mediaSize = CGSize(width: img.width, height: img.height) }
             window.contentView = host
         }
+        host?.options = assignment.options ?? WallpaperOptions()
         applyLook()
         window.orderFrontRegardless()
     }
+
+    private var speed: Float { Float((assignment.options ?? WallpaperOptions()).effectiveSpeed(default: Pref.speed)) }
 
     var isRunning: Bool {
         if let p = player { return p.rate > 0 }
@@ -179,16 +207,19 @@ final class SurfaceHostView: NSView {
     func update(_ a: Assignment) {
         assignment = a
         if !(a.reactive?.any ?? false) { host?.applyReactive(ReactiveLook()) }
+        let o = a.options ?? WallpaperOptions()
+        if host?.options != o { host?.options = o }
+        if let p = player, p.rate > 0, p.rate != speed { p.defaultRate = speed; p.rate = speed }
     }
 
     func applyLook() {
         host?.applyLook()
-        player?.defaultRate = Float(Pref.speed)
+        player?.defaultRate = speed
     }
 
     func setRunning(_ run: Bool) {
         if let p = player {
-            let r = Float(Pref.speed)
+            let r = speed
             if run { if p.rate != r { p.defaultRate = r; p.rate = r } } else if p.rate != 0 { p.pause() }
         }
     }

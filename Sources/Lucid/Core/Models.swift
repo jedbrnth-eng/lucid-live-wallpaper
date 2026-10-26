@@ -107,7 +107,8 @@ struct WallItem: Codable, Identifiable, Hashable {
     var creditFull: String?
     var lastAppliedAt: Date?
     var tags: [String]?
-
+    var options: WallpaperOptions?   // per-wallpaper fit / crop focus / speed (1.3.0+)
+    var referenced: Bool?            // true = imported "in place": Lucid points at your file and never deletes it
     var is4K: Bool { max(width, height) >= 3840 && min(width, height) >= 2160 }
     var resLabel: String {
         let m = max(width, height)
@@ -126,9 +127,35 @@ struct Assignment: Codable, Equatable {
     var path: String
     var kind: Kind
     var reactive: ReactiveOptions?   // optional audio-reactive look for this wallpaper
+    var options: WallpaperOptions?   // optional per-wallpaper fit / crop focus / speed (1.3.0+)
 
     /// Same media on screen (ignores look options, which are updated in place without reloading).
     func sameMedia(_ o: Assignment) -> Bool { path == o.path && kind == o.kind }
+}
+
+enum FitMode: String, Codable, CaseIterable { case fill, fit, stretch }
+
+/// Per-wallpaper display options. Every field is optional: nil = use the app-wide setting.
+struct WallpaperOptions: Codable, Equatable, Hashable {
+    var fit: FitMode?
+    var focusX: Double?   // 0 = left edge, 1 = right edge (fill only)
+    var focusY: Double?   // 0 = top, 1 = bottom (fill only)
+    var speed: Double?
+
+    init(fit: FitMode? = nil, focusX: Double? = nil, focusY: Double? = nil, speed: Double? = nil) {
+        self.fit = fit; self.focusX = focusX; self.focusY = focusY; self.speed = speed
+    }
+    /// Lenient: an unknown or malformed field is dropped on its own; it never makes the wallpaper unreadable.
+    init(from decoder: Decoder) throws {
+        guard let c = try? decoder.container(keyedBy: CodingKeys.self) else { self.init(); return }
+        self.init(fit: (try? c.decodeIfPresent(FitMode.self, forKey: .fit)) ?? nil,
+                  focusX: (try? c.decodeIfPresent(Double.self, forKey: .focusX)) ?? nil,
+                  focusY: (try? c.decodeIfPresent(Double.self, forKey: .focusY)) ?? nil,
+                  speed: (try? c.decodeIfPresent(Double.self, forKey: .speed)) ?? nil)
+    }
+    var isDefault: Bool { fit == nil && focusX == nil && focusY == nil && speed == nil }
+    func effectiveSpeed(default d: Double) -> Double { min(4, max(0.25, speed ?? d)) }
+    func effectiveFit(defaultFill: Bool) -> FitMode { fit ?? (defaultFill ? .fill : .fit) }
 }
 
 /// A Day/Night assignment: one wallpaper between sunrise and sunset, another the rest of the time.

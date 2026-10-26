@@ -138,6 +138,15 @@ import ImageIO
         save(); refresh()
     }
 
+    /// Per-wallpaper fit / focus / speed changed: update every assignment showing that item, in place (no reload).
+    func updateOptions(itemID: String, _ o: WallpaperOptions?) {
+        func fix(_ a: Assignment) -> Assignment { var a = a; if a.itemID == itemID { a.options = o }; return a }
+        state.all = state.all.map(fix)
+        state.perScreen = state.perScreen.mapValues(fix)
+        state.dayNight = state.dayNight?.mapValues { DayNightRule(day: fix($0.day), night: fix($0.night)) }
+        save(); refresh()
+    }
+
     func togglePause() { state.userPaused.toggle(); save(); updatePlayback() }
     func applyLook() {
         for s in surfaces.values { s.applyLook() }

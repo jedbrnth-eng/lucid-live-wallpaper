@@ -37,6 +37,8 @@ enum Pref {
     static var speed: Double { get { d.object(forKey: "speed") as? Double ?? 1.0 } set { d.set(newValue, forKey: "speed") } }
     static var fillScreen: Bool { get { bool("fillScreen", true) } set { d.set(newValue, forKey: "fillScreen") } }
     static var dim: Double { get { d.double(forKey: "dim") } set { d.set(newValue, forKey: "dim") } }
+    /// Import "in place": point at your file instead of copying it into Lucid's Media folder (off = copy, the default).
+    static var importInPlace: Bool { get { d.bool(forKey: "importInPlace") } set { d.set(newValue, forKey: "importInPlace") } }
     static var watchDownloads: Bool { get { d.bool(forKey: "watchDownloads") } set { d.set(newValue, forKey: "watchDownloads") } }
     static var activePlaylist: String? { get { d.string(forKey: "activePlaylist") } set { d.set(newValue, forKey: "activePlaylist") } }
 

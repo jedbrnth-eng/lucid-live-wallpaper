@@ -113,7 +113,11 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
         guard let it = libraryItem(item.id) else { return }
         if let p = it.localPath {
             engine.forget(path: p)
-            if p.hasPrefix(Paths.media.path) { try? FileManager.default.removeItem(atPath: p) }
+            // Only Lucid's own copies are deleted; a file imported "in place" (or anything outside Media/) never is.
+            if it.referenced != true, ImportPolicy.isContained(URL(fileURLWithPath: p).resolvingSymlinksInPath().path,
+                                                             in: Paths.media.resolvingSymlinksInPath().path) {
+                try? FileManager.default.removeItem(atPath: p)
+            }
         }
         if let t = it.thumbPath { try? FileManager.default.removeItem(atPath: t) }
         library.removeAll { $0.id == item.id }
@@ -140,7 +144,15 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
     /// An assignment that can go on screen right now (used by Day/Night): the item must already be on this Mac.
     func readyAssignment(for item: WallItem) -> Assignment? {
         guard let lib = libraryItem(item.id) ?? (item.isLocalReady ? item : nil), lib.isLocalReady, let p = lib.localPath else { return nil }
-        return Assignment(itemID: lib.id, title: lib.title, path: p, kind: lib.kind)
+        return Assignment(itemID: lib.id, title: lib.title, path: p, kind: lib.kind, options: lib.options)
+    }
+
+    /// Per-wallpaper fit / crop focus / speed. Saved with the library item and applied live wherever it is on screen.
+    func setOptions(_ item: WallItem, _ o: WallpaperOptions) {
+        guard let i = library.firstIndex(where: { $0.id == item.id }) else { return }
+        library[i].options = o.isDefault ? nil : o
+        saveLibrary()
+        engine.updateOptions(itemID: item.id, library[i].options)
     }
 
     func setDayNight(day: WallItem, night: WallItem, screenKey: String?) {
@@ -235,7 +247,7 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
     // Applying
     func setWallpaper(_ item: WallItem, screenKey: String? = nil) {
         if let lib = libraryItem(item.id), lib.isLocalReady, let p = lib.localPath {
-            engine.apply(Assignment(itemID: lib.id, title: lib.title, path: p, kind: lib.kind), screenKey: screenKey)
+            engine.apply(Assignment(itemID: lib.id, title: lib.title, path: p, kind: lib.kind, options: lib.options), screenKey: screenKey)
             didApply(lib.id)
             flash("Wallpaper set: \(lib.title)")
             return
@@ -277,6 +289,7 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
     }
 
     enum ImportResult { case added(Bool), duplicate, unsupported, failed(String) }
+    static let maxImportFiles = 500
 
     /// Drag & drop, Dock and Downloads-folder imports all land here. Files are COPIED
     /// into the app's Media folder so deleting ~/Downloads never breaks a wallpaper. Formats AVFoundation
@@ -286,52 +299,73 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
         guard !local.isEmpty else { return }
         Task {
             var files: [URL] = []
-            for u in local {
+            for u in local.prefix(Self.maxImportFiles) {
                 var isDir: ObjCBool = false
                 if FileManager.default.fileExists(atPath: u.path, isDirectory: &isDir), isDir.boolValue {
-                    let e = FileManager.default.enumerator(at: u, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])
-                    while let f = e?.nextObject() as? URL { if Media.kind(of: f) != nil { files.append(f) } }
+                    // Only files really inside the chosen folder: symlinks and hidden files are skipped.
+                    files += ImportPolicy.mediaFiles(in: u, limit: Self.maxImportFiles - files.count)
                 } else { files.append(u) }
+                if files.count >= Self.maxImportFiles { break }
             }
             if files.count > 1 || !quiet { flash(files.count > 1 ? "Importing \(files.count) files…" : "Importing \(files.first?.lastPathComponent ?? "")…") }
             var added = 0, low = 0, dup = 0, unsup = 0
             var failed: [String] = []
+            var rejected: [String] = []
             for u in files {
                 switch await importOne(u, move: move, site: site, page: page) {
                 case .added(let is4K): added += 1; if !is4K { low += 1 }
                 case .duplicate: dup += 1
-                case .unsupported: unsup += 1
+                case .unsupported: unsup += 1; rejected.append(u.lastPathComponent)
                 case .failed(let m): failed.append("\(u.lastPathComponent): \(m)")
                 }
             }
             var msg = added == 1 ? "Added to your library" : "Imported \(added) wallpapers"
             if added == 0 { msg = dup > 0 ? "Already in your library" : "Nothing imported" }
             if low > 0 { msg += " · \(low) below 4K (flagged)" }
-            if unsup > 0 { msg += " · \(unsup) not a video/photo" }
+            if unsup > 0 { msg += unsup == 1 && files.count == 1 ? " · “\(rejected[0])” isn't a video or photo Lucid can use" : " · \(unsup) not a video/photo" }
             if !failed.isEmpty { msg += " · failed: " + failed.prefix(2).joined(separator: "; ") }
             flash(msg)
         }
     }
 
-    func importOne(_ u: URL, move: Bool, site: String?, page: String?) async -> ImportResult {
-        guard let k = Media.kind(of: u), Media.looksLikeMedia(u) else { return .unsupported }
+    func importOne(_ input: URL, move: Bool, site: String?, page: String?) async -> ImportResult {
         let fm = FileManager.default
+        // A chosen symlink counts as the file it points to; anything that isn't a regular file is refused.
+        let u = input.resolvingSymlinksInPath()
+        guard (try? u.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true else { return .unsupported }
         let size = (try? fm.attributesOfItem(atPath: u.path)[.size] as? Int64) ?? 0
+        let ext = u.pathExtension.lowercased()
+        let k: Kind
+        switch ImportPolicy.check(ext: ext, size: size, header: Media.header(u)) {
+        case .ok(let kind): k = kind
+        case .rejected(let why): return ImportPolicy.kind(forExtension: ext) == nil ? .unsupported : .failed(why)
+        }
         let base = u.deletingPathExtension().lastPathComponent
         let id = "local:" + Paths.safe("\(base)-\(size)")
         if inLibrary(id) && (libraryItem(id)?.isLocalReady ?? false) { if move { try? fm.removeItem(at: u) }; return .duplicate }
-        let ext = u.pathExtension.lowercased()
+        // Damaged files: make sure AVFoundation / ImageIO can actually read it before copying anything.
         var needsTx = false
         if k == .video {
-            let playable = (try? await AVURLAsset(url: u).load(.isPlayable)) ?? false
+            let asset = AVURLAsset(url: u)
+            let playable = (try? await asset.load(.isPlayable)) ?? false
             needsTx = !playable || ["webm", "mkv", "avi", "wmv", "flv", "ogv"].contains(ext)
-        }
-        var dest = Paths.media.appendingPathComponent(Paths.safe(base) + "-" + String(size, radix: 36) + "." + (needsTx ? "mp4" : ext))
+            if !needsTx, await Media.dims(u.path, .video).map({ $0.0 > 0 && $0.1 > 0 }) != true {
+                return .failed("damaged, or no video track")
+            }
+        } else if await Media.dims(u.path, .image) == nil { return .failed("damaged, or not a photo format macOS can read") }
+        let inMedia = ImportPolicy.isContained(u.path, in: Paths.media.resolvingSymlinksInPath().path)
+        let reference = Pref.importInPlace && !move && !needsTx && !inMedia
+        var dest = Paths.media.appendingPathComponent(ImportPolicy.destinationName(base: base, size: size, ext: needsTx ? "mp4" : ext))
+        guard ImportPolicy.isContained(dest.path, in: Paths.media.path) else { return .failed("bad file name") }
         do {
-            if u.standardizedFileURL.path.hasPrefix(Paths.media.standardizedFileURL.path) { dest = u }
+            if inMedia || reference { dest = u }
             else if needsTx {
-                try await Transcoder.toHEVC(u, dest)
+                do { try await Transcoder.toHEVC(u, dest) } catch {
+                    try? fm.removeItem(at: dest)   // never leave a half-written file behind
+                    return .failed(Transcoder.ffmpeg == nil ? error.localizedDescription : "damaged, or a video format Lucid can't convert")
+                }
                 if move { try? fm.removeItem(at: u) }
+                if await Media.dims(dest.path, .video) == nil { try? fm.removeItem(at: dest); return .failed("could not convert this video") }
             } else {
                 try? fm.removeItem(at: dest)
                 if move { try fm.moveItem(at: u, to: dest) } else { try fm.copyItem(at: u, to: dest) }
@@ -344,6 +378,7 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
                           fileExt: dest.pathExtension, localPath: dest.path)
         it.author = site
         it.pageURL = page
+        it.referenced = reference ? true : nil
         it.thumbPath = await Media.thumbnail(dest.path, k, id: id)
         it.bytes = (try? fm.attributesOfItem(atPath: dest.path)[.size] as? Int64)
         it.duration = k == .video ? await Media.duration(dest.path) : nil
@@ -411,7 +446,7 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
             MainActor.assumeIsolated { self?.next() } }
     }
 
-    var libraryBytes: Int64 { library.filter { $0.localPath?.hasPrefix(Paths.media.path) ?? false }.compactMap(\.bytes).reduce(0, +) }
+    var libraryBytes: Int64 { library.filter { $0.referenced != true && ($0.localPath?.hasPrefix(Paths.media.path) ?? false) }.compactMap(\.bytes).reduce(0, +) }
 
     // Self-test (headless): `open -a "Lucid" --args -selftest YES`
     func runSelfTest() async -> [String: Any] {

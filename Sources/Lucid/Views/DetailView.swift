@@ -77,6 +77,7 @@ struct DetailView: View {
                 }
             }
             if let e = dl.errors[item.id] { Label(e, systemImage: "exclamationmark.triangle").foregroundStyle(.orange) }
+            if let lib, lib.isLocalReady { WallpaperOptionsRow(item: lib) }
             HStack(spacing: 10) {
                 Button { store.setWallpaper(it) } label: { Label("Set as Wallpaper", systemImage: "sparkles.tv") }
                     .buttonStyle(.borderedProminent).tint(accent.opacity(0.85)).keyboardShortcut(.defaultAction)

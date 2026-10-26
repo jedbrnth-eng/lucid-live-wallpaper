@@ -17,22 +17,15 @@ import ImageIO
 
 enum Media {
     /// Check the file's first bytes (not just its name) so a renamed program can't pose as a wallpaper.
-    static func looksLikeMedia(_ u: URL) -> Bool {
-        guard let h = try? FileHandle(forReadingFrom: u), let b = try? h.read(upToCount: 16), b.count >= 12 else { return false }
-        try? h.close()
-        let x = [UInt8](b)
-        func at(_ o: Int, _ s: String) -> Bool { Array(s.utf8).enumerated().allSatisfy { o + $0.offset < x.count && x[o + $0.offset] == $0.element } }
-        if at(4, "ftyp") || at(4, "moov") || at(4, "mdat") || at(4, "wide") || at(4, "free") { return true }   // MP4 / MOV / HEIC
-        if x[0] == 0x1A && x[1] == 0x45 && x[2] == 0xDF && x[3] == 0xA3 { return true }                       // WebM / MKV
-        if at(0, "RIFF") || at(0, "OggS") || x[0] == 0x47 || (x[0] == 0 && x[1] == 0 && x[2] == 1) { return true } // AVI/WebP, OGV, TS, MPEG
-        if (x[0] == 0xFF && x[1] == 0xD8) || at(1, "PNG") || at(0, "GIF8") || at(0, "II*") || at(0, "MM\u{0}*") { return true } // JPG PNG GIF TIFF
-        if at(0, "FLV") || (x[0] == 0x30 && x[1] == 0x26 && x[2] == 0xB2) { return true }                    // FLV, WMV
-        return false
+    static func looksLikeMedia(_ u: URL) -> Bool { ImportPolicy.sniff(header(u)) != .unknown }
+    static func header(_ u: URL) -> [UInt8] {
+        guard let h = try? FileHandle(forReadingFrom: u) else { return [] }
+        defer { try? h.close() }
+        return [UInt8]((try? h.read(upToCount: 16)) ?? Data())
     }
-    static let videoExts: Set<String> = ["mp4", "mov", "m4v", "webm", "mkv", "avi", "wmv", "flv", "ogv", "mpg", "mpeg", "ts"]
     static func kind(of url: URL) -> Kind? {
         let ext = url.pathExtension.lowercased()
-        if videoExts.contains(ext) { return .video }
+        if let k = ImportPolicy.kind(forExtension: ext) { return k }
         guard let t = UTType(filenameExtension: ext) else { return nil }
         if t.conforms(to: .movie) || t.conforms(to: .video) { return .video }
         if t.conforms(to: .image) { return .image }

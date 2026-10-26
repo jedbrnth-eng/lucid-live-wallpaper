@@ -32,8 +32,13 @@ struct SettingsView: View {
     @State private var fill = Pref.fillScreen
     @State private var dim = Pref.dim
     @State private var watch = Pref.watchDownloads
+    @State private var inPlace = Pref.importInPlace
 
     var body: some View {
+        ScrollView { content.padding(.trailing, 12) }.frame(minHeight: 520, idealHeight: 760)
+    }
+
+    private var content: some View {
         VStack(alignment: .leading, spacing: 22) {
             Header(title: "Settings", subtitle: "Playback, power saving and content sources.")
             GroupBox("Look") {
@@ -61,6 +66,12 @@ struct SettingsView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Toggle("Auto-add 4K videos and photos I download to ~/Downloads", isOn: $watch)
                         .onChange(of: watch) { _, v in Pref.watchDownloads = v; store.startDownloadsWatcher() }
+                    Picker("When I import a file", selection: $inPlace) {
+                        Text("Copy it into Lucid's library (recommended)").tag(false)
+                        Text("Use it where it is (saves disk space)").tag(true)
+                    }.pickerStyle(.radioGroup)
+                        .onChange(of: inPlace) { _, v in Pref.importInPlace = v }
+                    Text("Copies keep working if you delete or move the original. In-place files are never deleted by Lucid; WebM/MKV are always converted into the library.").font(.caption).foregroundStyle(.secondary)
                     Text("Only new files that are at least 3840×2160 are added; they're copied, so you can clear Downloads later. You can also drop files on the window or the Dock icon. Your library lives in ~/Library/Application Support/Lucid/Media.").font(.caption).foregroundStyle(.secondary)
                 }.frame(maxWidth: .infinity, alignment: .leading).padding(6)
             }

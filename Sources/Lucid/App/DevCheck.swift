@@ -78,10 +78,54 @@ import AppKit
             await wait(0.3)
             r["windows_after_clear"] = engine.surfaces.count
         }
+        await importChecks(store, &r)
         r["phase_now"] = store.dayNight.phase.rawValue
         r["next_change"] = store.dayNight.nextChange.map { ISO8601DateFormatter().string(from: $0) } ?? NSNull()
         r["day_night_source"] = store.dayNight.sourceText
         finish(r)
+    }
+
+    /// 4. Import: a good photo is accepted, a program renamed .mp4, an empty file, a damaged video and a symlink out of
+    ///    the chosen folder are refused; per-wallpaper fit/focus reaches the on-screen layer.
+    private static func importChecks(_ store: Store, _ r: inout [String: Any]) async {
+        let fm = FileManager.default
+        let dir = Paths.support.appendingPathComponent("import-check", isDirectory: true)
+        try? fm.removeItem(at: dir); try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        guard let png = makePNG(.systemTeal, "import-check/Good Photo.png") else { r["import_error"] = "png"; return }
+        try? Data([0x4D, 0x5A, 0x90, 0, 3, 0, 0, 0, 4, 0, 0, 0, 0xFF, 0xFF, 0, 0]).write(to: dir.appendingPathComponent("evil.mp4"))
+        try? Data().write(to: dir.appendingPathComponent("empty.jpg"))
+        try? Data([0, 0, 0, 0x18] + Array("ftypmp42".utf8) + [UInt8](repeating: 0x41, count: 4096)).write(to: dir.appendingPathComponent("damaged.mp4"))
+        func label(_ x: Store.ImportResult) -> String {
+            switch x { case .added: return "added"; case .duplicate: return "duplicate"; case .unsupported: return "unsupported"; case .failed(let m): return "failed: \(m)" }
+        }
+        r["import_good_png"] = label(await store.importOne(png, move: false, site: nil, page: nil))
+        r["import_evil_mp4"] = label(await store.importOne(dir.appendingPathComponent("evil.mp4"), move: false, site: nil, page: nil))
+        r["import_empty_jpg"] = label(await store.importOne(dir.appendingPathComponent("empty.jpg"), move: false, site: nil, page: nil))
+        r["import_damaged_mp4"] = label(await store.importOne(dir.appendingPathComponent("damaged.mp4"), move: false, site: nil, page: nil))
+        if let w = ProcessInfo.processInfo.environment["LUCID_CHECK_WEBM"] {   // optional: a real WebM to convert (needs ffmpeg)
+            r["import_webm"] = label(await store.importOne(URL(fileURLWithPath: w), move: false, site: nil, page: nil))
+            r["import_webm_converted"] = store.library.first { $0.title == Importer.niceTitle(URL(fileURLWithPath: w).deletingPathExtension().lastPathComponent) }?.fileExt ?? NSNull()
+        }
+        let copied = store.library.first { $0.title == "Good Photo" }
+        r["import_copy_in_media"] = copied?.localPath.map { ImportPolicy.isContained($0, in: Paths.media.path) } ?? false
+        r["import_copy_name"] = copied?.localPath.map { URL(fileURLWithPath: $0).lastPathComponent } ?? NSNull()
+        // Per-wallpaper options: stretch, then fill with top focus, on a reactive image surface (forces a window)
+        if let it = copied, let main = NSScreen.screens.first {
+            store.setWallpaper(it)
+            store.engine.setReactive(ReactiveOptions(glow: true), for: main)
+            await wait(0.5)
+            store.setOptions(it, WallpaperOptions(fit: .stretch))
+            await wait(0.3)
+            if let h = store.engine.surfaces[main.stableKey]?.host {
+                h.layoutSubtreeIfNeeded()
+                r["options_stretch_frame_equals_screen"] = h.contentLayer.bounds.size == h.bounds.size
+                store.setOptions(it, WallpaperOptions(fit: .fill, focusY: 0))
+                await wait(0.3); h.layoutSubtreeIfNeeded()
+                r["options_fill_top_maxY_equals_screen"] = abs(h.contentLayer.frame.maxY - h.bounds.maxY) < 1
+                r["options_saved"] = store.libraryItem(it.id)?.options == WallpaperOptions(fit: .fill, focusY: 0)
+            } else { r["options_error"] = "no surface" }
+            store.engine.clear(screenKey: nil)
+        }
     }
 
     private static func finish(_ r: [String: Any]) {
