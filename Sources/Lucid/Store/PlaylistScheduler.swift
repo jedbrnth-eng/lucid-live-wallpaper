@@ -27,6 +27,16 @@ struct PlaylistRun: Codable, Equatable {
 
     var current: String? { order.indices.contains(position) ? order[position] : nil }
 
+    /// A position outside the saved order (hand-edited or damaged playback.json) restarts at the first item.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        playlistID = try c.decode(String.self, forKey: .playlistID)
+        order = try c.decode([String].self, forKey: .order)
+        changedAt = try c.decode(Date.self, forKey: .changedAt)
+        let p = try c.decode(Int.self, forKey: .position)
+        position = order.indices.contains(p) ? p : 0
+    }
+
     /// Next item. A new round starts when every item has been shown; with shuffle the new round never starts
     /// with the item that is on screen now.
     mutating func advance<R: RandomNumberGenerator>(ids: [String], shuffle: Bool, now: Date, rng: inout R) {

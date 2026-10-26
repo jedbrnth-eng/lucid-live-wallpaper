@@ -34,9 +34,10 @@ final class AudioAnalyser {
     private let bassBins: ClosedRange<Int>, midBins: ClosedRange<Int>, trebleBins: ClosedRange<Int>
 
     init(sampleRate: Double, fftSize: Int = 2048) {
-        self.sampleRate = sampleRate > 0 ? sampleRate : 48_000
+        // A real device runs between 8 kHz and 768 kHz; anything else (0, NaN, 1e-300…) would break the bin maths.
+        self.sampleRate = (8_000...768_000).contains(sampleRate) ? sampleRate : 48_000
         var n = 64
-        while n < fftSize { n *= 2 }
+        while n < min(fftSize, 16_384) { n *= 2 }
         self.fftSize = n
         log2n = vDSP_Length(log2(Double(n)))
         setup = vDSP_create_fftsetup(log2n, FFTRadix(kFFTRadix2))!

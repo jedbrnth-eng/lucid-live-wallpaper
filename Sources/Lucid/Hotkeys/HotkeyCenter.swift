@@ -20,12 +20,12 @@ import Carbon
     private static let signature: OSType = 0x4C55_4344   // 'LUCD'
 
     private init() {
-        bindings = HotkeyBindings.decode(UserDefaults.standard.data(forKey: Self.defaultsKey))
+        bindings = HotkeyBindings.decode(Pref.d.data(forKey: Self.defaultsKey))
     }
 
     func update(_ b: HotkeyBindings) {
         bindings = b
-        UserDefaults.standard.set(b.encoded(), forKey: Self.defaultsKey)
+        Pref.d.set(b.encoded(), forKey: Self.defaultsKey)
         apply()
     }
 

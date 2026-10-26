@@ -32,9 +32,10 @@ Reviewed for 1.3.0 on 2026-10-26.
 
 ## Release pipeline
 
-- `release.yml` (1.3.0 change, additive): also writes `Lucid.zip.sha256` and attaches it to the release. Nothing else changes; no step is removed or weakened.
+- `release.yml` (1.3.0 change): also writes `Lucid.zip.sha256` and attaches it to the release; refuses a VERSION that isn't plain `x.y.z`, and passes the tag to `gh`/`awk` through environment variables instead of pasting it into the script (a crafted VERSION could otherwise run commands; checked with a local simulation). No step is removed or weakened.
 - What a checksum does and doesn't do: it detects a damaged or swapped download, and lets people and package managers (the draft Homebrew cask) pin the exact bytes. It does **not** prove who built the zip: anyone who can publish a release can publish a matching checksum. Real authenticity needs Developer ID signing + notarization (a decision for the owner; needs an Apple Developer account).
 - Recommended, not done here: pin `actions/checkout` to a full commit SHA instead of `@v4` in both workflows (a moved tag could change what runs with `contents: write`).
+- `install.sh` skips the checksum only when the release has none (HTTP 404, releases before 1.3.0); a network or server error stops the install instead of silently skipping verification.
 - `install.sh` clears the quarantine flag by design, which skips Gatekeeper's first-launch check. The README says so; the checksum check runs before that.
 
 ## Static checks run for 1.3.0

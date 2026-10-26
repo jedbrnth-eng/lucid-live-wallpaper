@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Part of Lucid: https://github.com/jedbrnth-eng/lucid-live-wallpaper
 
-// Headless integration check for development builds (off unless you pass -lucidCheck YES):
+// Headless integration check for development builds. Runs only with BOTH -lucidCheck YES on the command line and
+// LUCID_SUPPORT_DIR set (it refuses to touch your real library), and keeps its settings in a separate defaults suite:
 //   LUCID_SUPPORT_DIR=/tmp/lucid-check Lucid.app/Contents/MacOS/Lucid -lucidCheck YES
 // Sets a Day/Night pair of generated images, flips the phase, checks the cross-fade released the old window,
 // then feeds synthetic bass to an audio-reactive look. Writes check.json and quits.
@@ -93,6 +94,7 @@ import AppKit
         await importChecks(store, &r)
         renderViews(store, &r)
         await weatherChecks(store, &r)
+        await reviewChecks(store, &r)
         // 6. Global shortcuts (dev bundle's own defaults): enable, check all three registered, a second claim of the
         //    same combination is refused by macOS, then turn them off again.
         let hk = HotkeyCenter.shared
@@ -181,6 +183,11 @@ import AppKit
         if let d = try? Data(contentsOf: Paths.playback) {
             r["playlist_resume_saved"] = PlaybackState.decode(d).runs[EngineState.allKey] == store.runs[EngineState.allKey]
         }
+        // A wallpaper set on one display while an all-displays playlist plays must survive the playlist's next change.
+        store.setWallpaper(items[0], screenKey: main.stableKey)
+        store.playlistTick(now: Date().addingTimeInterval(3601 * 3))
+        await wait(0.3)
+        r["review_l3_per_display_kept_after_tick"] = store.engine.state.perScreen[main.stableKey] != nil
         store.stopPlaylist()
         store.engine.clear(screenKey: nil)
         await wait(0.3)
@@ -229,6 +236,87 @@ import AppKit
         e.setWeather(WeatherRule(map: [:]), screenKey: nil)
         e.clear(screenKey: nil)
         await wait(0.3)
+    }
+
+    /// 9. Regressions from the 1.3.0 review: what remove() may delete, symlinks and same-name/same-size files on a
+    ///    moving import, two imports of one file at once, a late video poster, and windows after rapid changes.
+    private static func reviewChecks(_ store: Store, _ r: inout [String: Any]) async {
+        let fm = FileManager.default, e = store.engine
+        let dir = Paths.support.appendingPathComponent("review-check", isDirectory: true)
+        try? fm.removeItem(at: dir)
+        for s in ["a", "b", "victim"] { try? fm.createDirectory(at: dir.appendingPathComponent(s), withIntermediateDirectories: true) }
+        func label(_ x: Store.ImportResult) -> String {
+            switch x { case .added: return "added"; case .duplicate: return "duplicate"; case .unsupported: return "unsupported"; case .failed(let m): return "failed: \(m)" }
+        }
+        // H1: a library entry whose thumbnail is a file elsewhere, and whose path is a link (outside Media) into Media.
+        if let img = makePNG(.systemGreen, "review-check/a/Victim Photo.png") {
+            _ = await store.importOne(img, move: false, site: nil, page: nil)
+            if var it = store.library.first(where: { $0.title == "Victim Photo" }), let real = it.localPath {
+                let victim = dir.appendingPathComponent("victim/notes.txt"), link = dir.appendingPathComponent("victim/link-into-media.png")
+                try? Data("keep me".utf8).write(to: victim)
+                try? fm.createSymbolicLink(at: link, withDestinationURL: URL(fileURLWithPath: real))
+                it.thumbPath = victim.path; it.localPath = link.path
+                store.addToLibrary(it)
+                store.remove(it)
+                r["review_h1_outside_thumb_kept"] = fm.fileExists(atPath: victim.path)
+                r["review_h1_outside_link_kept"] = (try? fm.destinationOfSymbolicLink(atPath: link.path)) != nil
+            }
+        }
+        // H2: a link dropped where Lucid moves files in must not move or delete what it points to.
+        if let secret = makePNG(.systemRed, "review-check/victim/Secret.png") {
+            let link = dir.appendingPathComponent("a/Linked.png")
+            try? fm.createSymbolicLink(at: link, withDestinationURL: secret)
+            r["review_h2_move_symlink_result"] = label(await store.importOne(link, move: true, site: nil, page: nil))
+            r["review_h2_move_symlink_target_kept"] = fm.fileExists(atPath: secret.path)
+        }
+        // H2: a different photo with the same name and size is added, not deleted as a "duplicate".
+        if let a = makePNG(.systemOrange, "review-check/a/Same.png"), let b = makePNG(.systemPurple, "review-check/b/Same.png") {
+            for u in [a, b] { if let h = try? FileHandle(forWritingTo: u) { h.seekToEndOfFile(); let n = 8192 - Int(h.offsetInFile); if n > 0 { h.write(Data(count: n)) }; try? h.close() } }
+            let sizes = [a, b].map { (try? fm.attributesOfItem(atPath: $0.path)[.size] as? Int) ?? -1 }
+            r["review_h2_same_size"] = sizes[0] == sizes[1]
+            _ = await store.importOne(a, move: false, site: nil, page: nil)
+            r["review_h2_collision_result"] = label(await store.importOne(b, move: true, site: nil, page: nil))
+            r["review_h2_collision_items"] = store.library.filter { $0.title == "Same" }.count
+            try? fm.removeItem(at: b); try? fm.copyItem(at: a, to: b)   // an identical copy is a real duplicate
+            r["review_h2_identical_result"] = label(await store.importOne(b, move: true, site: nil, page: nil))
+            r["review_h2_collision_items_after_identical"] = store.library.filter { $0.title == "Same" }.count
+        }
+        // M4: the same new file imported twice at once.
+        if let t = makePNG(.systemBrown, "review-check/a/Twice.png") {
+            async let x = store.importOne(t, move: false, site: nil, page: nil)
+            async let y = store.importOne(t, move: false, site: nil, page: nil)
+            r["review_m4_concurrent_same_file"] = [label(await x), label(await y)].sorted().joined(separator: ",")
+        }
+        // M4: a video's poster finishing after a newer wallpaper was set must not replace it as the desktop picture.
+        if let v = ProcessInfo.processInfo.environment["LUCID_CHECK_VIDEO"], let still = makePNG(.systemMint, "review-check/still.png"),
+           let main = NSScreen.screens.first {
+            var calls: [String] = []
+            LucidEngine.desktopHook = { url, s in if s.stableKey == main.stableKey { calls.append(url.lastPathComponent) } }
+            e.apply(Assignment(itemID: "review-video", title: "Video", path: v, kind: .video), screenKey: nil)
+            e.apply(Assignment(itemID: "review-still", title: "Still", path: still.path, kind: .image), screenKey: nil)
+            await wait(5)
+            r["review_m4_desktop_last_is_current"] = calls.last == still.lastPathComponent
+            r["review_m4_desktop_calls"] = calls.joined(separator: ",")
+            LucidEngine.desktopHook = nil
+            e.clear(screenKey: nil)
+        }
+        // M5: three changes inside one cross-fade, then clear: no window may be left behind.
+        let pics = [NSColor.systemRed, .systemGreen, .systemBlue].enumerated().compactMap { makePNG($0.element, "review-check/fade\($0.offset).png") }
+        if pics.count == 3 {
+            let looks = pics.enumerated().map { Assignment(itemID: "fade\($0.offset)", title: "Fade", path: $0.element.path, kind: .image, reactive: ReactiveOptions(glow: true)) }
+            e.apply(looks[0], screenKey: nil); await wait(0.5)
+            e.apply(looks[1], screenKey: nil); await wait(0.2)
+            e.apply(looks[2], screenKey: nil)
+            e.clear(screenKey: nil)
+            await wait(LucidEngine.crossfade + 1.5)
+            r["review_m5_fading_after_clear"] = e.fadingCount
+            r["review_m5_wallpaper_windows_after_clear"] = NSApp.windows.filter { $0 is WallpaperWindow && $0.isVisible }.count
+        }
+        // L1: turning location off forgets the saved fix.
+        Pref.dayNightUseLocation = true
+        Pref.lastLocation = (13.7563, 100.5018)
+        Pref.dayNightUseLocation = false
+        r["review_l1_location_cleared_when_off"] = Pref.lastLocation == nil
     }
 
     /// 8. Render every screen of the app off-screen with the shared environment, so a view that reads an

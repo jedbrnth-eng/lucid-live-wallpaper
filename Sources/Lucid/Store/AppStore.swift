@@ -48,6 +48,7 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
     var downloadsTimer: Timer?
     var folderTimer: Timer?
     var adoptInFlight: Set<String> = []
+    private var importsInFlight: Set<String> = []
     var watchSince: Date?
     var seenDownloads: Set<String> = []
     var pendingSizes: [String: Int] = [:]
@@ -123,13 +124,10 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
         guard let it = libraryItem(item.id) else { return }
         if let p = it.localPath {
             engine.forget(path: p)
-            // Only Lucid's own copies are deleted; a file imported "in place" (or anything outside Media/) never is.
-            if it.referenced != true, ImportPolicy.isContained(URL(fileURLWithPath: p).resolvingSymlinksInPath().path,
-                                                             in: Paths.media.resolvingSymlinksInPath().path) {
-                try? FileManager.default.removeItem(atPath: p)
-            }
+            // Only Lucid's own copies are deleted; a file imported "in place", a link, or anything outside Media/ never is.
+            if it.referenced != true, ImportPolicy.isSafeToDelete(p, inside: Paths.media) { try? FileManager.default.removeItem(atPath: p) }
         }
-        if let t = it.thumbPath { try? FileManager.default.removeItem(atPath: t) }
+        if let t = it.thumbPath, ImportPolicy.isSafeToDelete(t, inside: Paths.thumbs) { try? FileManager.default.removeItem(atPath: t) }
         library.removeAll { $0.id == item.id }
         saveLibrary()
         flash("Removed “\(it.title)”")
@@ -225,7 +223,7 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
         if screenKey == nil { runs = [:] }   // "all displays" replaces every per-display playlist, like setting one wallpaper for all
         runs[scope] = PlaylistRun(playlistID: pid, ids: p.items.map(\.id), shuffle: p.shuffle, now: Date())
         saveRuns(); syncPlaylistScopes()
-        show(scope)
+        show(scope, starting: true)
         let when = PlaylistScheduler.sanitize(p.times).isEmpty ? "every \(Self.intervalLabel(p.minutes))" : "at set times"
         flash("Playing “\(p.name)” · \(p.shuffle ? "shuffle" : "in order") · \(when)")
     }
@@ -240,12 +238,15 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
     }
     private func syncPlaylistScopes() { engine.crossfadeScopes = Set(runs.keys); scheduleRotation() }
 
-    /// Put a run's current item on its scope.
-    private func show(_ scope: String) {
+    /// Put a run's current item on its scope. Starting an all-displays playlist replaces every display's wallpaper;
+    /// its later changes keep anything set on one display since (a wallpaper or a Day/Night rule).
+    private func show(_ scope: String, starting: Bool = false) {
         guard let r = runs[scope], let id = r.current, let p = playlists.first(where: { $0.id == r.playlistID }),
               let it = p.items.first(where: { $0.id == id }) else { return }
-        let others = Set(runs.keys).subtracting([EngineState.allKey])
-        setWallpaper(libraryItem(it.id) ?? it, screenKey: scope == EngineState.allKey ? nil : scope, keepScreens: others)
+        var keep = Set(runs.keys)
+        if scope == EngineState.allKey && !starting { keep.formUnion(engine.state.perScreen.keys); keep.formUnion((engine.state.dayNight ?? [:]).keys) }
+        keep.remove(EngineState.allKey)
+        setWallpaper(libraryItem(it.id) ?? it, screenKey: scope == EngineState.allKey ? nil : scope, keepScreens: keep)
     }
     private func step(_ scope: String, forward: Bool) {
         guard var r = runs[scope], let p = playlists.first(where: { $0.id == r.playlistID }) else { return }
@@ -394,7 +395,9 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
 
     func importOne(_ input: URL, move: Bool, site: String?, page: String?) async -> ImportResult {
         let fm = FileManager.default
-        // A chosen symlink counts as the file it points to; anything that isn't a regular file is refused.
+        // A symlink you choose counts as the file it points to. A moving import (files dropped into Lucid's own folders)
+        // never follows one: moving or deleting a link's target could take a file from anywhere on the Mac.
+        if move && ImportPolicy.isSymlink(input) { return .unsupported }
         let u = input.resolvingSymlinksInPath()
         guard (try? u.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true else { return .unsupported }
         let size = (try? fm.attributesOfItem(atPath: u.path)[.size] as? Int64) ?? 0
@@ -405,8 +408,31 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
         case .rejected(let why): return ImportPolicy.kind(forExtension: ext) == nil ? .unsupported : .failed(why)
         }
         let base = u.deletingPathExtension().lastPathComponent
-        let id = "local:" + Paths.safe("\(base)-\(size)")
-        if inLibrary(id) && (libraryItem(id)?.isLocalReady ?? false) { if move { try? fm.removeItem(at: u) }; return .duplicate }
+        var nameBase = base
+        var id = "local:" + Paths.safe("\(base)-\(size)")
+        /// nil = no ready library item with this id; true = it is this very file or has identical contents.
+        func sameAsLibrary(_ id: String) -> Bool? {
+            guard let have = libraryItem(id), have.isLocalReady, let hp = have.localPath else { return nil }
+            return URL(fileURLWithPath: hp).resolvingSymlinksInPath().path == u.path || fm.contentsEqual(atPath: hp, andPath: u.path)
+        }
+        if sameAsLibrary(id) == false {
+            // A different file that only shares the name and size (IMG_0001.JPG from two cameras): keep both.
+            guard let tag = ImportPolicy.contentTag(u) else { return .failed("couldn't read the file") }
+            nameBase = "\(tag)-\(base)"
+            id = "local:" + Paths.safe("\(tag)-\(base)-\(size)")
+        }
+        switch sameAsLibrary(id) {
+        case true?:
+            let isLibraryFile = libraryItem(id)?.localPath.map { URL(fileURLWithPath: $0).resolvingSymlinksInPath().path == u.path } ?? false
+            if move && !isLibraryFile { try? fm.removeItem(at: u) }   // an identical copy is already in the library
+            return .duplicate
+        case false?: return .failed("another file with the same name and size is already in your library")
+        case nil: break
+        }
+        // The same file dropped twice at once: the second waits for nothing and leaves the file alone.
+        guard !importsInFlight.contains(id) else { return .duplicate }
+        importsInFlight.insert(id)
+        defer { importsInFlight.remove(id) }
         // Damaged files: make sure AVFoundation / ImageIO can actually read it before copying anything.
         var needsTx = false
         if k == .video {
@@ -419,7 +445,7 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
         } else if await Media.dims(u.path, .image) == nil { return .failed("damaged, or not a photo format macOS can read") }
         let inMedia = ImportPolicy.isContained(u.path, in: Paths.media.resolvingSymlinksInPath().path)
         let reference = Pref.importInPlace && !move && !needsTx && !inMedia
-        var dest = Paths.media.appendingPathComponent(ImportPolicy.destinationName(base: base, size: size, ext: needsTx ? "mp4" : ext))
+        var dest = Paths.media.appendingPathComponent(ImportPolicy.destinationName(base: nameBase, size: size, ext: needsTx ? "mp4" : ext))
         guard ImportPolicy.isContained(dest.path, in: Paths.media.path) else { return .failed("bad file name") }
         do {
             if inMedia || reference { dest = u }

@@ -31,14 +31,18 @@ say "Downloading Lucid..."
 "${CURL[@]}" --progress-bar -o "$TMP/Lucid.zip" "$URL" || die "Download failed. Check your internet connection, or see the README to build from source."
 
 # Releases from 1.3.0 on publish Lucid.zip.sha256 next to the zip. If it's there, the download must match it.
-if "${CURL[@]}" -s -o "$TMP/Lucid.zip.sha256" "$SUM_URL" 2>/dev/null; then
+# Only a clean "404 not found" (a release older than 1.3.0) skips the check; any other failure stops the install.
+SUM_HTTP="$("${CURL[@]}" -s -o "$TMP/Lucid.zip.sha256" -w '%{http_code}' "$SUM_URL" 2>/dev/null)" || true
+if [ "$SUM_HTTP" = "200" ]; then
   WANT="$(awk 'NR==1 {print $1}' "$TMP/Lucid.zip.sha256")"
   GOT="$(shasum -a 256 "$TMP/Lucid.zip" | awk '{print $1}')"
   [[ "$WANT" =~ ^[0-9a-f]{64}$ ]] || die "The checksum file looks wrong. Nothing was installed. Please open an issue."
   [ "$WANT" = "$GOT" ] || die "Checksum mismatch: the download is damaged or was changed. Nothing was installed."
   say "Checksum OK ($GOT)"
-else
+elif [ "$SUM_HTTP" = "404" ]; then
   say "No checksum published for this release (older than 1.3.0); continuing without it."
+else
+  die "Couldn't download the checksum (HTTP ${SUM_HTTP:-none}). Nothing was installed; please try again."
 fi
 
 say "Installing to $DEST..."

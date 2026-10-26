@@ -106,6 +106,14 @@ struct DayNightSchedule {
     var mode: Mode
     var timeZone: TimeZone
 
+    /// Manual minutes may come from hand-edited preferences: any whole number is read as that time of day.
+    init(mode: Mode, timeZone: TimeZone) {
+        if case .manual(let ds, let ns) = mode { self.mode = .manual(dayStartMinute: Self.minuteOfDay(ds), nightStartMinute: Self.minuteOfDay(ns)) }
+        else { self.mode = mode }
+        self.timeZone = timeZone
+    }
+    static func minuteOfDay(_ m: Int) -> Int { ((m % 1440) + 1440) % 1440 }
+
     private var calendar: Calendar { var c = Calendar(identifier: .gregorian); c.timeZone = timeZone; return c }
 
     func sunEvent(onLocalDayOf d: Date) -> SunEvent? {
@@ -223,10 +231,10 @@ enum TimeZoneCoordinates {
         func dms(_ part: ArraySlice<Character>, degDigits: Int) -> Double? {
             guard let sign = part.first, sign == "+" || sign == "-" else { return nil }
             let digits = String(part.dropFirst())
-            guard digits.allSatisfy(\.isNumber), digits.count == degDigits + 2 || digits.count == degDigits + 4 else { return nil }
+            guard digits.allSatisfy({ $0.isASCII && $0.isNumber }), digits.count == degDigits + 2 || digits.count == degDigits + 4 else { return nil }
             let a = Array(digits)
-            let d = Double(String(a[0..<degDigits]))!, m = Double(String(a[degDigits..<degDigits + 2]))!
-            let s = a.count > degDigits + 2 ? Double(String(a[(degDigits + 2)...]))! : 0
+            guard let d = Double(String(a[0..<degDigits])), let m = Double(String(a[degDigits..<degDigits + 2])) else { return nil }
+            let s = a.count > degDigits + 2 ? (Double(String(a[(degDigits + 2)...])) ?? 0) : 0
             return (sign == "-" ? -1 : 1) * (d + m / 60 + s / 3600)
         }
         guard let lat = dms(chars[..<split], degDigits: 2), let lon = dms(chars[split...], degDigits: 3) else { return nil }

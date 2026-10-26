@@ -21,10 +21,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
     func applicationDidFinishLaunching(_ n: Notification) {
         MainActor.assumeIsolated {
-            if UserDefaults.standard.bool(forKey: "lucidCheck") { LucidEngine.setsDesktopPicture = false }
+            if DevMode.checkRequested && !DevMode.check {
+                FileHandle.standardError.write(Data("lucidCheck needs LUCID_SUPPORT_DIR (a throwaway folder); refusing to run it on your library.\n".utf8))
+                exit(2)
+            }
+            if DevMode.check { LucidEngine.setsDesktopPicture = false }
             let store = Store.shared
             store.engine.refresh()
-            if UserDefaults.standard.bool(forKey: "lucidCheck") { Task { @MainActor in await DevCheck.run(store) }; return }
+            if DevMode.check { Task { @MainActor in await DevCheck.run(store) }; return }
             store.startDownloadsWatcher()
             HotkeyCenter.shared.handler = { action in
                 switch action {
@@ -35,15 +39,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             HotkeyCenter.shared.apply()
             UpdateChecker.shared.start()
-            let args = UserDefaults.standard
-            if args.bool(forKey: "selftest") {
+            // Test hooks below come from this launch's arguments only (DevMode), never from saved preferences.
+            if DevMode.flag("selftest") {
                 Task { @MainActor in
                     let r = await store.runSelfTest()
                     if let d = try? JSONSerialization.data(withJSONObject: r, options: [.prettyPrinted, .sortedKeys]) { try? d.write(to: Paths.selftest) }
                     NSApp.terminate(nil)
                 }
             }
-            if let p = args.string(forKey: "applyPath"), FileManager.default.fileExists(atPath: p) {
+            if let p = DevMode.arg("applyPath"), FileManager.default.fileExists(atPath: p) {
                 let u = URL(fileURLWithPath: p)
                 Task { @MainActor in
                     store.importFiles([u])
@@ -51,10 +55,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     if let it = store.libraryItem("local:\(Paths.safe(p))") { store.setWallpaper(it) }
                 }
             }
-            if let id = args.string(forKey: "applyAerial"), let it = store.aerials.first(where: { $0.id == "aerials:\(id)" || $0.title == id }) {
+            if let id = DevMode.arg("applyAerial"), let it = store.aerials.first(where: { $0.id == "aerials:\(id)" || $0.title == id }) {
                 store.setWallpaper(it)
             }
-            if let src = args.string(forKey: "testLoop") {
+            if let src = DevMode.arg("testLoop") {
                 Task {
                     let dst = URL(fileURLWithPath: src + ".loop.mp4")
                     do { try await LoopMaker.make(URL(fileURLWithPath: src), to: dst); print("LOOP_OK \(dst.path)") }
@@ -63,10 +67,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
                 return
             }
-            if let t = args.string(forKey: "testLive"), let it = store.live.first(where: { $0.id.contains(t) }) ?? store.live.first {
+            if let t = DevMode.arg("testLive"), let it = store.live.first(where: { $0.id.contains(t) }) ?? store.live.first {
                 store.setWallpaper(it)
             }
-            if let q = args.string(forKey: "testDownloadWikimedia") {
+            if let q = DevMode.arg("testDownloadWikimedia") {
                 Task { @MainActor in
                     if let r = try? await Providers.wikimedia(q, offset: 0, featured: true), let first = r.items.first {
                         store.setWallpaper(first)

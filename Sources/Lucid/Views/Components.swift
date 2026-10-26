@@ -61,6 +61,7 @@ struct Card: View {
     @State private var hover = false
     var body: some View {
         let current = engine.currentAssignments.contains { $0.itemID == item.id }
+        let onMac = store.inLibrary(item.id) || (item.localPath.map { FileManager.default.fileExists(atPath: $0) } ?? false)
         VStack(alignment: .leading, spacing: 6) {
             Color.clear.aspectRatio(16 / 9, contentMode: .fit)
                 .overlay(RemoteImage(url: item.thumbURL, localPath: item.thumbPath))
@@ -90,8 +91,8 @@ struct Card: View {
                             }.help("Favorite")
                             Spacer()
                             Button { store.setWallpaper(item) } label: {
-                                Label(current ? "On Desktop" : "Apply", systemImage: current ? "checkmark" : "sparkles.tv").font(.caption.weight(.bold))
-                            }.help("Set as wallpaper on all displays")
+                                Label(current ? "On Desktop" : onMac ? "Apply" : "Download & Apply", systemImage: current ? "checkmark" : "sparkles.tv").font(.caption.weight(.bold))
+                            }.help(onMac ? "Set as wallpaper on all displays" : "Download in full quality (can be hundreds of MB), then set on all displays")
                         }
                         .buttonStyle(.plain).padding(.horizontal, 10).padding(.vertical, 7)
                         .background(LinearGradient(colors: [.clear, .black.opacity(0.75)], startPoint: .top, endPoint: .bottom))

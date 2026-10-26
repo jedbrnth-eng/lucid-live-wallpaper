@@ -29,9 +29,11 @@ enum ImportPolicy {
         if at(4, "ftyp") || at(4, "moov") || at(4, "mdat") || at(4, "wide") || at(4, "free") { return .video }   // MP4 / MOV
         if x[0] == 0x1A && x[1] == 0x45 && x[2] == 0xDF && x[3] == 0xA3 { return .video }                       // WebM / MKV
         if at(0, "RIFF") { return at(8, "WEBP") ? .image : .video }                                             // WebP / AVI
+        // Exact still-image signatures first: "GIF8" starts with 0x47, which alone would look like an MPEG-TS sync byte.
+        if (x[0] == 0xFF && x[1] == 0xD8) || at(1, "PNG") || at(0, "GIF8") || at(0, "II*") || at(0, "MM\u{0}*") { return .image }
+        if at(0, "BM") && x[6] == 0 && x[7] == 0 && x[8] == 0 && x[9] == 0 { return .image }                     // BMP: reserved bytes are zero
         if at(0, "OggS") || x[0] == 0x47 || (x[0] == 0 && x[1] == 0 && x[2] == 1) { return .video }            // OGV, TS, MPEG
         if at(0, "FLV") || (x[0] == 0x30 && x[1] == 0x26 && x[2] == 0xB2) { return .video }                     // FLV, WMV
-        if (x[0] == 0xFF && x[1] == 0xD8) || at(1, "PNG") || at(0, "GIF8") || at(0, "II*") || at(0, "MM\u{0}*") || at(0, "BM") { return .image }
         return .unknown
     }
 
@@ -40,7 +42,10 @@ enum ImportPolicy {
         guard let k = kind(forExtension: ext) else { return .rejected("not a video or photo") }
         if size <= 0 { return .rejected("the file is empty") }
         if size > maxBytes { return .rejected("larger than 16 GB") }
-        if sniff(header) == .unknown { return .rejected("the contents are not a video or photo") }
+        // The contents must be the kind the name claims (HEIC image sequences use video-style "ftyp" brands).
+        let s = sniff(header)
+        let heicLike = k == .image && ["heic", "heif"].contains(ext.lowercased()) && s == .video
+        if s != (k == .video ? .video : .image) && !heicLike { return .rejected("the contents are not a video or photo") }
         return .ok(k)
     }
 
@@ -60,6 +65,33 @@ enum ImportPolicy {
         let p = URL(fileURLWithPath: path).standardizedFileURL.pathComponents
         let d = URL(fileURLWithPath: dir).standardizedFileURL.pathComponents
         return p.count > d.count && Array(p.prefix(d.count)) == d
+    }
+
+    /// A file the library may delete: a real file (not a link) whose path, both as written and with links resolved,
+    /// is strictly inside `root`. A hand-edited library.json can't make Lucid delete anything else.
+    static func isSafeToDelete(_ path: String, inside root: URL) -> Bool {
+        let url = URL(fileURLWithPath: path)
+        guard let v = try? url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey]),
+              v.isSymbolicLink != true, v.isRegularFile == true else { return false }
+        let std = url.standardizedFileURL.path, rootReal = root.resolvingSymlinksInPath().path
+        return (isContained(std, in: root.standardizedFileURL.path) || isContained(std, in: rootReal))
+            && isContained(url.resolvingSymlinksInPath().path, in: rootReal)
+    }
+
+    /// The item itself is a symbolic link (not followed).
+    static func isSymlink(_ url: URL) -> Bool {
+        (try? URL(fileURLWithPath: url.path).resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink) == true
+    }
+
+    /// Short tag from the first 1 MB of a file (48-bit FNV-1a, base 36), to tell apart different files that share a
+    /// name and a size. Not a security hash: the caller still compares contents before treating files as the same.
+    static func contentTag(_ url: URL) -> String? {
+        guard let h = try? FileHandle(forReadingFrom: url) else { return nil }
+        defer { try? h.close() }
+        guard let d = try? h.read(upToCount: 1 << 20) else { return nil }
+        var x: UInt64 = 0xcbf29ce484222325
+        for b in d { x = (x ^ UInt64(b)) &* 0x100000001b3 }
+        return String(x & 0xFFFF_FFFF_FFFF, radix: 36)
     }
 
     /// Video/photo files inside a folder the user chose: regular files only, hidden files and symlinks skipped

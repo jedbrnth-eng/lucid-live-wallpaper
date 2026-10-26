@@ -15,7 +15,7 @@ All notable changes to Lucid. The format follows [Keep a Changelog](https://keep
 - **Weather wallpapers** (off by default): a different wallpaper when it rains, snows, is clear or cloudy, using Open-Meteo with an approximate location.
 - **Update check** (off by default): once a day, shows a link when a newer release is on GitHub. Nothing is installed automatically.
 - Draft Homebrew cask in `packaging/` (not published) and `docs/lock-screen-feasibility.md` (why Lucid can't animate the Lock Screen, and what a screen saver would take).
-- Unit tests grew from 33 to 95, including saved files written by the real 1.1.1 and 1.2.0 code and recorded Open-Meteo and GitHub responses. The headless development check now covers pausing, import, playlists, shortcuts, weather and renders every screen.
+- Unit tests grew from 33 to 106, including saved files written by the real 1.1.1 and 1.2.0 code and recorded Open-Meteo and GitHub responses. The headless development check now covers pausing, import, playlists, shortcuts, weather and renders every screen.
 
 ### Changed
 - Settings are grouped with new Keyboard shortcuts and Weather sections and scroll in the Settings window.
@@ -23,12 +23,25 @@ All notable changes to Lucid. The format follows [Keep a Changelog](https://keep
 - Library items, Day/Night pairs and playlists gained optional fields; files saved by 1.1.1 and 1.2.0 load unchanged.
 
 ### Fixed
+- A playlist playing on all displays no longer wipes a wallpaper or Day/Night pair you set on one display when it changes to the next item (starting the playlist still replaces them, as before).
+- A video's desktop picture that finishes rendering after you already switched wallpapers no longer replaces the newer one.
+- Importing the same file twice at once (for example dropping it twice) adds it once.
+- A different photo that only shares a name and size with one in your library (two cameras' `IMG_0001.JPG`) is added instead of being treated as a duplicate.
+- GIFs were recognised by their first byte as video; they are photos again. A file whose contents don't match its extension (a photo named `.mp4`) is refused.
+- Manual Day/Night times saved outside 00:00–23:59 (hand-edited preferences) are read as that time of day instead of giving wrong phases.
+- A damaged `playback.json` or zone.tab entry, or an impossible audio sample rate, can no longer crash Lucid.
 - Opening Settings inside the main window could crash in development builds of this release (a missing shared object); every window now gets the same set, and the development check renders each screen to catch it.
 
 ### Security
 - Imports check the file's contents, size and readability before copying, give copies sanitised names inside Lucid's Media folder, skip links that point outside a chosen folder, and never delete files used in place. Lucid now only deletes files strictly inside its Media folder.
 - New network features use HTTPS only, fixed hosts, short timeouts, response size limits and strict parsing, and fail quietly.
-- Releases publish `Lucid.zip.sha256`; `install.sh` verifies it when present and only uses HTTPS, including redirects.
+- Releases publish `Lucid.zip.sha256`; `install.sh` verifies it and only uses HTTPS, including redirects. Only a release older than 1.3.0 (checksum "not found") installs without it; any other failure to fetch the checksum stops the install.
+- Removing a wallpaper deletes only Lucid's own files: real files inside its Media and Thumbs folders, never a link or a path outside them, even if `library.json` says otherwise.
+- Files dropped into Lucid's folder are never followed through links: a link there can no longer make Lucid move or delete the file it points to.
+- The update check opens a release page only if it is exactly `https://github.com/jedbrnth-eng/lucid-live-wallpaper/releases/tag/…` (no `..`, user names, ports, queries or escapes).
+- Turning off "Use my location" for Day/Night also forgets the saved approximate location.
+- Development test switches (`-lucidCheck`, `-applyAerial`, `-testLive`, …) are read from the command line only, never from saved preferences; the headless check refuses to run without a throwaway `LUCID_SUPPORT_DIR` and keeps its settings apart from yours.
+- The release workflow accepts only an `x.y.z` VERSION and passes it to the shell through the environment.
 - `docs/security-review.md` documents every input, every `Process` use and the permissions Lucid asks for.
 
 ## [1.2.0] - 2026-10-26

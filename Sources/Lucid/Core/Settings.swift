@@ -15,8 +15,28 @@ import ImageIO
 
 // MARK: - Settings
 
+/// Development-only switches, read from this launch's command line only (never from saved preferences, so a stray
+/// `defaults write` can't make every launch run a test or start a download).
+enum DevMode {
+    static let launchArgs = UserDefaults.standard.volatileDomain(forName: UserDefaults.argumentDomain)
+    static func arg(_ k: String) -> String? { launchArgs[k].map { "\($0)" } }
+    static func flag(_ k: String) -> Bool { arg(k).map { ["YES", "TRUE", "1"].contains($0.uppercased()) } ?? false }
+    /// `-lucidCheck YES` was passed.
+    static let checkRequested = flag("lucidCheck")
+    /// The headless check runs only against a throwaway folder (LUCID_SUPPORT_DIR), never your real library.
+    static let check = checkRequested && ProcessInfo.processInfo.environment["LUCID_SUPPORT_DIR"] != nil
+    static let checkSuite = "com.jedbrn.lucid.devcheck"
+    /// Settings storage: during the check, a separate suite that starts empty every run, so the check never changes
+    /// your real preferences (shortcuts, update check, location).
+    static let defaults: UserDefaults = {
+        guard check, let s = UserDefaults(suiteName: checkSuite) else { return .standard }
+        s.removePersistentDomain(forName: checkSuite)
+        return s
+    }()
+}
+
 enum Pref {
-    static let d = UserDefaults.standard
+    static let d = DevMode.defaults
     /// Missing key -> default. `bool(forKey:)`/`integer(forKey:)` also accept "YES"/"5" given as launch arguments.
     private static func bool(_ k: String, _ def: Bool) -> Bool { d.object(forKey: k) == nil ? def : d.bool(forKey: k) }
     private static func int(_ k: String, _ def: Int) -> Int { d.object(forKey: k) == nil ? def : d.integer(forKey: k) }
@@ -55,7 +75,11 @@ enum Pref {
 
     // Day/Night
     static var dayNightManual: Bool { get { d.bool(forKey: "dayNightManual") } set { d.set(newValue, forKey: "dayNightManual") } }
-    static var dayNightUseLocation: Bool { get { d.bool(forKey: "dayNightUseLocation") } set { d.set(newValue, forKey: "dayNightUseLocation") } }
+    /// Turning location off also forgets the saved fix.
+    static var dayNightUseLocation: Bool {
+        get { d.bool(forKey: "dayNightUseLocation") }
+        set { d.set(newValue, forKey: "dayNightUseLocation"); if !newValue { d.removeObject(forKey: "lastLocation") } }
+    }
     static var dayStartMinute: Int { get { int("dayStartMinute", 7 * 60) } set { d.set(newValue, forKey: "dayStartMinute") } }
     static var nightStartMinute: Int { get { int("nightStartMinute", 19 * 60) } set { d.set(newValue, forKey: "nightStartMinute") } }
     /// Last location fix, rounded to ~1 km, so Auto keeps working offline and after relaunch.

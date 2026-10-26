@@ -43,9 +43,20 @@ enum UpdateCheck {
               let tag = j["tag_name"] as? String, let page = j["html_url"] as? String,
               (j["draft"] as? Bool) != true, (j["prerelease"] as? Bool) != true,
               let comps = components(tag),
-              let u = URL(string: page), u.scheme == "https", u.host == "github.com",
-              u.path.hasPrefix("/\(repo)/releases/") else { return nil }
+              let u = URL(string: page), isReleasePage(u) else { return nil }
         return ReleaseInfo(version: comps.map(String.init).joined(separator: "."), page: u)
+    }
+
+    /// Exactly https://github.com/<repo>/releases/tag/<tag>: no user info, port, query, fragment, `.`/`..` or
+    /// percent-escapes, so what a browser opens after normalising is the same page we checked.
+    static func isReleasePage(_ u: URL) -> Bool {
+        guard let c = URLComponents(url: u, resolvingAgainstBaseURL: false), c.scheme == "https", c.host == "github.com",
+              c.user == nil, c.password == nil, c.port == nil, c.query == nil, c.fragment == nil,
+              !c.percentEncodedPath.contains("%") else { return false }
+        let parts = c.percentEncodedPath.split(separator: "/", omittingEmptySubsequences: false).map(String.init)
+        let want = ["", repo.split(separator: "/").map(String.init)[0], repo.split(separator: "/").map(String.init)[1], "releases", "tag"]
+        guard parts.count == 6, Array(parts.prefix(5)) == want, !parts[5].isEmpty, parts[5] != ".", parts[5] != ".." else { return false }
+        return true
     }
 
     static func shouldCheck(enabled: Bool, last: Date?, now: Date) -> Bool {

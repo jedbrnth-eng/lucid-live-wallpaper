@@ -19,13 +19,18 @@ jobs:
       - uses: actions/checkout@v4
       - name: Read version
         id: v
-        run: echo "tag=v$(tr -d '[:space:]' < VERSION)" >> "$GITHUB_OUTPUT"
+        run: |
+          v="$(tr -d '[:space:]' < VERSION)"
+          # Plain x.y.z only: the value becomes a tag, a title and part of shell commands below.
+          [[ "$v" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "VERSION must look like 1.2.3, got: $v" >&2; exit 1; }
+          echo "tag=v$v" >> "$GITHUB_OUTPUT"
       - name: Skip if this version is already released
         id: exists
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.v.outputs.tag }}
         run: |
-          if gh release view "${{ steps.v.outputs.tag }}" >/dev/null 2>&1; then echo "found=true" >> "$GITHUB_OUTPUT"; else echo "found=false" >> "$GITHUB_OUTPUT"; fi
+          if gh release view "$TAG" >/dev/null 2>&1; then echo "found=true" >> "$GITHUB_OUTPUT"; else echo "found=false" >> "$GITHUB_OUTPUT"; fi
       - name: Build Lucid.app
         if: steps.exists.outputs.found == 'false'
         run: ./build.sh
@@ -40,11 +45,12 @@ jobs:
         if: steps.exists.outputs.found == 'false'
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.v.outputs.tag }}
         run: |
-          # Release notes = this version's CHANGELOG section + the install steps.
-          v="$(tr -d '[:space:]' < VERSION)"
-          awk -v h="## [$v]" 'index($0, h) == 1 {on = 1; print "## Changes in this version"; next} on && (/^## \[/ || /^\[[^]]+\]: /) {exit} on' CHANGELOG.md > notes.md
+          # Release notes = this version's CHANGELOG section + the install steps. Values reach the shell and awk
+          # through the environment only (never pasted into the script text).
+          H="## [${TAG#v}]" awk 'index($0, ENVIRON["H"]) == 1 {on = 1; print "## Changes in this version"; next} on && (/^## \[/ || /^\[[^]]+\]: /) {exit} on' CHANGELOG.md > notes.md
           cat .github/release-notes.md >> notes.md
-          gh release create "${{ steps.v.outputs.tag }}" Lucid.zip Lucid.zip.sha256 \
-            --title "Lucid ${{ steps.v.outputs.tag }}" \
+          gh release create "$TAG" Lucid.zip Lucid.zip.sha256 \
+            --title "Lucid $TAG" \
             --notes-file notes.md

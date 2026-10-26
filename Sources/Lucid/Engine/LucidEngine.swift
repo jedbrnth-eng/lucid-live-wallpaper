@@ -36,6 +36,10 @@ import ImageIO
     static let crossfade: TimeInterval = 1.2
     /// Off only in the headless dev check, so it never changes your real desktop picture.
     static var setsDesktopPicture = true
+    /// Dev check only: receives desktop-picture changes instead of macOS (so ordering can be checked headlessly).
+    static var desktopHook: ((URL, NSScreen) -> Void)?
+    /// Old windows still cross-fading out (dev check).
+    var fadingCount: Int { fading.count }
 
     /// Current day/night phase (set by DayNightController).
     var phase: () -> DayPhase = { .day }
@@ -200,15 +204,21 @@ import ImageIO
     // MARK: Desktop picture (shown in Mission Control, other Spaces and after quitting)
 
     private func setDesktop(_ url: URL, _ screen: NSScreen) {
+        if let h = Self.desktopHook { h(url, screen); return }
         try? NSWorkspace.shared.setDesktopImageURL(url, for: screen, options: [
             .imageScaling: NSNumber(value: NSImageScaling.scaleProportionallyUpOrDown.rawValue),
             .allowClipping: NSNumber(value: true)])
     }
     private func setDesktopPicture(_ a: Assignment, _ targets: [NSScreen]) {
-        guard Self.setsDesktopPicture else { return }
+        guard Self.setsDesktopPicture || Self.desktopHook != nil else { return }
         switch a.kind {
         case .image: targets.forEach { setDesktop(URL(fileURLWithPath: a.path), $0) }
-        case .video: Task { if let poster = await Media.poster(a) { targets.forEach { self.setDesktop(poster, $0) } } }
+        case .video:
+            Task {
+                guard let poster = await Media.poster(a) else { return }
+                // The poster can take a while: skip displays that have moved on to another wallpaper meanwhile.
+                for s in targets where self.assignment(for: s)?.sameMedia(a) == true { self.setDesktop(poster, s) }
+            }
         }
     }
     private func updateDesktopPictures() {
