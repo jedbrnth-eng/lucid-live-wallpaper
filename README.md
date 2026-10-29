@@ -35,7 +35,7 @@
 
 <p align="center">
   <a href="https://github.com/jedbrnth-eng/lucid-live-wallpaper/releases/latest/download/Lucid.zip"><img src="https://img.shields.io/badge/%E2%AC%87%20Download%20Lucid%20for%20Mac-Free-7c5cff?style=for-the-badge&logo=apple&logoColor=white" alt="Download Lucid for Mac, free" height="56"></a><br>
-  <sub>Free · Apple Silicon (M1 or newer) · macOS 14+ · about 3 MB</sub>
+  <sub>Free · Apple Silicon (M1 or newer) · macOS 14+ (14.2+ for audio reactive) · about 3 MB</sub>
 </p>
 
 ## Download (no Terminal needed)
@@ -45,6 +45,8 @@
 1. Click the big **Download Lucid for Mac** button above. A file called `Lucid.zip` lands in your Downloads folder.
 2. Double-click `Lucid.zip`, then drag **Lucid.app** into your **Applications** folder.
 3. Open Lucid. macOS will say it can't verify the app, because Lucid isn't notarized by Apple yet. Click **Done**, open **System Settings → Privacy & Security**, scroll down and click **Open Anyway** next to Lucid, then confirm. You only do this once.
+
+<sub>Want to check the download first? Get `Lucid.zip.sha256` from the [release page](https://github.com/jedbrnth-eng/lucid-live-wallpaper/releases/latest), put it next to `Lucid.zip`, and run `shasum -a 256 -c Lucid.zip.sha256` in that folder. It should print `Lucid.zip: OK`.</sub>
 
 Prefer one command instead? Use the installer below.
 
@@ -137,8 +139,9 @@ rm -rf /Applications/Lucid.app "$HOME/Library/Application Support/Lucid"
 ## Use it
 
 1. Open Lucid. It also lives in your menu bar.
-2. On **Home** (or in **Discover**), hover a wallpaper to preview it and click **Apply**.
-3. Have more than one screen? Open a wallpaper and use **Set on Display**.
+2. On **Home** (or in **Discover**), pick a wallpaper and click **Apply**. Lucid downloads it and sets it. Once a clip is on your Mac (Apple Aerials you already have count), hovering its card plays a live preview; until then you see its poster.
+3. Want all five Live 4K categories? Install [ffmpeg](https://ffmpeg.org) (`brew install ffmpeg`) and reopen Lucid. Without it, Lucid hides the Wikimedia Commons clips, which come as WebM and need converting. That is 232 of the 594 clips, and every category except **Space**.
+4. Have more than one screen? Open a wallpaper and use **Set on Display**.
 
 ## Bring your own
 
@@ -197,7 +200,7 @@ Straight answers, so you don't have to find out after installing:
 - **Not notarized by Apple (yet).** The first launch needs the one-time **Open Anyway** step above, or the installer script.
 - **Apple Silicon only.** Lucid is built for M1 or newer on macOS 14 Sonoma or later. Intel Macs aren't supported.
 - Global shortcuts come from a fixed list of combinations (no custom recorder yet).
-- Converting WebM/MKV needs ffmpeg; MP4 and MOV don't.
+- Converting WebM/MKV needs ffmpeg; MP4 and MOV don't. Without ffmpeg the Wikimedia Commons Live 4K clips (WebM) are hidden, which leaves only the **Space** category.
 
 ## Where the wallpapers come from
 
