@@ -40,6 +40,8 @@
 
 ## Download (no Terminal needed)
 
+**Current release: [1.3.0](https://github.com/jedbrnth-eng/lucid-live-wallpaper/releases/tag/v1.3.0).** Lucid is a standalone app: install `Lucid.app`, with no companion app or older wallpaper app required. See [CHANGELOG.md](CHANGELOG.md) for the release history.
+
 1. Click the big **Download Lucid for Mac** button above. A file called `Lucid.zip` lands in your Downloads folder.
 2. Double-click `Lucid.zip`, then drag **Lucid.app** into your **Applications** folder.
 3. Open Lucid. macOS will say it can't verify the app, because Lucid isn't notarized by Apple yet. Click **Done**, open **System Settings → Privacy & Security**, scroll down and click **Open Anyway** next to Lucid, then confirm. You only do this once.
@@ -69,7 +71,7 @@ Lucid downloads, lands in your Applications folder and opens. From 1.3.0 on, the
 xattr -dr com.apple.quarantine /Applications/Lucid.app
 ```
 
-**Build it yourself** (about a minute, needs Xcode Command Line Tools):
+**Build it yourself** (needs Xcode Command Line Tools; the first optimized build can take several minutes):
 
 ```bash
 xcode-select --install          # once
@@ -252,12 +254,22 @@ Security notes and the threat model: [docs/security-review.md](docs/security-rev
 
 ## Test
 
+The fast, offline checks do not need a built app:
+
+```bash
+./test.sh                                        # unit tests: pausing, import rules, playlists, shortcuts, sun/twilight, weather, update check, saved data, Home rows, usage counter, preview limits
+python3 -m unittest tools/test_build_catalog.py  # catalog-builder tests
 ```
-./test.sh                                          # unit tests (offline): pausing, import rules, playlists, shortcuts, sun/twilight, weather, update check, saved data, Home rows, usage counter, preview limits
-./selftest.sh                                      # every source returns only ≥3840×2160 items
-python3 -m unittest tools/test_build_catalog.py    # offline catalog-builder tests
-python3 tools/build_catalog.py catalog.json        # rebuild the Live 4K catalog (slow)
+
+These next checks use live services and are not part of the offline test suite:
+
+```bash
+./build.sh
+./selftest.sh                                    # launches build/Lucid.app; queries wallpaper sources
+python3 tools/build_catalog.py catalog.json      # rebuilds the catalog from live sources (slow)
 ```
+
+`selftest.sh` writes `selftest.json` in `~/Library/Application Support/Lucid/`. Inspect its JSON results: the wrapper's exit code alone does not prove every source passed. It uses the normal Lucid app environment, so don't run it alongside your everyday copy as if it were an isolated unit test. The catalog-builder command rewrites `catalog.json`; review the diff before committing it.
 
 ## Credits
 
