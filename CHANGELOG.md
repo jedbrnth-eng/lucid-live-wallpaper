@@ -4,6 +4,10 @@ All notable changes to Lucid. The format follows [Keep a Changelog](https://keep
 
 ## [Unreleased]
 
+### Security
+- **Releases carry a build attestation**: a record, signed through GitHub, that `Lucid.zip` was built by the release workflow from a given commit. Check one with `gh attestation verify Lucid.zip --repo jedbrnth-eng/lucid-live-wallpaper`.
+- The workflows use `actions/checkout` at a fixed commit instead of a moving tag, don't leave its token on disk, and Dependabot proposes the updates.
+
 ## [1.3.0] - 2026-10-26
 
 ### Added
