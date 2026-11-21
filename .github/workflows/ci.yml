@@ -16,7 +16,7 @@ concurrency:
 jobs:
   build:
     name: Build and test (macOS)
-    runs-on: macos-14
+    runs-on: macos-15
     # A normal run takes 2-8 minutes. Without this, a hung test would hold the macOS runner for 6 hours.
     timeout-minutes: 30
     steps:

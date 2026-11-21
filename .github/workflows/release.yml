@@ -14,7 +14,7 @@ permissions:
 jobs:
   release:
     name: Build and publish
-    runs-on: macos-14
+    runs-on: macos-15
     permissions:
       contents: write        # create the release and its tag
       # For the build attestation: a record, signed through GitHub, that Lucid.zip was built by this workflow
