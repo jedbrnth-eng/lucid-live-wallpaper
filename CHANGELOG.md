@@ -4,6 +4,12 @@ All notable changes to Lucid. The format follows [Keep a Changelog](https://keep
 
 ## [Unreleased]
 
+### Changed
+- **One video, one decoder, on every display.** When the same video plays on several displays (the usual Apply sets it on all of them), Lucid now decodes it once and shows that one player on every display, so every display shows the same frame. Before, each display decoded its own copy. Measured with the new benchmark: a second display used to add 56–106% to Lucid's CPU use and 59–92% to its CPU energy; now it adds at most 22% (often nothing). When one display is covered by a full-screen app, the shared video keeps playing for the others and pauses once none shows it. Changing a wallpaper's speed now cross-fades into the new speed from the same moment.
+
+### Developer
+- `-lucidBench <video or folder>` (with `LUCID_SUPPORT_DIR`) measures what playback costs Lucid per video and per number of displays, and writes `bench.json`. It never starts the app's windows, menu-bar item or Dock icon and never puts anything on screen, so it is safe next to your everyday copy. It records the Mac's load average with every run, because other work skews the figures.
+
 ### Security
 - **Releases carry a build attestation**: a record, signed through GitHub, that `Lucid.zip` was built by the release workflow from a given commit. Check one with `gh attestation verify Lucid.zip --repo jedbrnth-eng/lucid-live-wallpaper`.
 - The workflows use `actions/checkout` at a fixed commit instead of a moving tag, don't leave its token on disk, and Dependabot proposes the updates.

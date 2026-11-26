@@ -94,7 +94,7 @@ struct DisplaysView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                Header(title: "Displays", subtitle: "Each display gets its own looping player. New monitors follow the “All Displays” wallpaper automatically.")
+                Header(title: "Displays", subtitle: "Displays showing the same video share one player, decoded once. New monitors follow the “All Displays” wallpaper automatically.")
                 HStack {
                     Button { engine.togglePause() } label: {
                         Label(engine.state.userPaused ? "Resume All" : "Pause All", systemImage: engine.state.userPaused ? "play.fill" : "pause.fill")

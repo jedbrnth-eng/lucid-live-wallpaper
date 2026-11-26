@@ -217,7 +217,7 @@ Loops are modified (cross-faded, re-encoded) copies for **personal use on your o
 
 ## How it works
 
-Each display gets a borderless window at desktop level, above the system wallpaper and below the desktop icons, holding a muted, hardware-decoded looping `AVQueuePlayer` (or a still image when an audio-reactive look or a Day/Night pair needs one). Changing wallpaper cross-fades the new window over the old one, then releases the old player. A frame from the video is also set as the real desktop picture, so Mission Control and other Spaces show a matching still.
+Each display gets a borderless window at desktop level, above the system wallpaper and below the desktop icons, holding a muted, hardware-decoded looping `AVQueuePlayer` (or a still image when an audio-reactive look or a Day/Night pair needs one). Displays that show the same video share one player, so it is decoded once and every display shows the same frame. Changing wallpaper cross-fades the new window over the old one, then releases the old player. A frame from the video is also set as the real desktop picture, so Mission Control and other Spaces show a matching still.
 Data lives in `~/Library/Application Support/Lucid/`.
 
 ## Project layout
@@ -271,6 +271,14 @@ These next checks use live services and are not part of the offline test suite:
 ./selftest.sh                                    # launches build/Lucid.app; queries wallpaper sources
 python3 tools/build_catalog.py catalog.json      # rebuilds the catalog from live sources (slow)
 ```
+
+Playback benchmark (needs a build; never opens a window or touches your desktop, so it is safe next to your everyday copy):
+
+```bash
+LUCID_SUPPORT_DIR=/tmp/lucid-bench build/Lucid.app/Contents/MacOS/Lucid -lucidBench ~/Movies/clip.mp4 -benchDisplays 1,2 -benchSeconds 12 -benchRounds 3
+```
+
+It plays the clip (or every video in a folder) the way the desktop does, on 1 and 2 simulated displays, and writes `bench.json` with Lucid's CPU %, CPU energy, memory and wakeups, plus the Mac's load average for each run. It measures Lucid only, not the window server or the display. Compare builds at similar load, or by ratios within one run.
 
 `selftest.sh` writes `selftest.json` in `~/Library/Application Support/Lucid/`. Inspect its JSON results: the wrapper's exit code alone does not prove every source passed. It uses the normal Lucid app environment, so don't run it alongside your everyday copy as if it were an isolated unit test. The catalog-builder command rewrites `catalog.json`; review the diff before committing it.
 
