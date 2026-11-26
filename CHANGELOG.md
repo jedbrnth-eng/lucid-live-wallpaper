@@ -18,6 +18,10 @@ All notable changes to Lucid. The format follows [Keep a Changelog](https://keep
 - **Releases carry a build attestation**: a record, signed through GitHub, that `Lucid.zip` was built by the release workflow from a given commit. Check one with `gh attestation verify Lucid.zip --repo jedbrnth-eng/lucid-live-wallpaper`.
 - The workflows use `actions/checkout` at a fixed commit instead of a moving tag, don't leave its token on disk, and Dependabot proposes the updates.
 
+### Fixed
+- **Unplugging is noticed at once.** Lucid used to check the power source every 20 seconds, so with "pause on battery" on, the video kept playing for up to 20 seconds after you unplugged. macOS now tells Lucid the moment the power source or the charge changes, and the 20-second check is gone.
+- **A UPS's charge no longer counts as your Mac's battery.** With a UPS connected, its charge could be read instead of the Mac's own battery and pause Lucid for "battery low" while the Mac was well charged.
+
 ## [1.3.0] - 2026-10-26
 
 ### Added
