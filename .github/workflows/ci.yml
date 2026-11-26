@@ -29,6 +29,8 @@ jobs:
         run: ./build.sh
       - name: Unit tests (Swift, offline)
         run: ./test.sh
+      - name: Dev check is headless (no window, no desktop change, no Keychain)
+        run: ./headless-check.sh
       - name: Check the bundle
         run: |
           test -x build/Lucid.app/Contents/MacOS/Lucid
