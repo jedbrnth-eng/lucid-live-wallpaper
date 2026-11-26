@@ -112,7 +112,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ s: NSApplication) -> Bool { false }
 }
 
+/// Entry point. A headless development run (Headless.swift) never starts the SwiftUI app, so no main window,
+/// menu-bar item or Dock icon appears; everything else starts the app as usual.
 @main
+enum LucidMain {
+    static func main() {
+        MainActor.assumeIsolated {
+            if DevMode.benchRequested { Headless.runBench() } else { LucidApp.main() }
+        }
+    }
+}
+
 struct LucidApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var delegate
     @StateObject private var store = Store.shared

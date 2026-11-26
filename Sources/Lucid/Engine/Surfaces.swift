@@ -182,7 +182,7 @@ final class SurfaceHostView: NSView {
         }
         host?.options = assignment.options ?? WallpaperOptions()
         applyLook()
-        window.orderFrontRegardless()
+        if !Headless.active { window.orderFrontRegardless() }   // headless runs (benchmark) never draw
     }
 
     private var speed: Float { Float((assignment.options ?? WallpaperOptions()).effectiveSpeed(default: Pref.speed)) }

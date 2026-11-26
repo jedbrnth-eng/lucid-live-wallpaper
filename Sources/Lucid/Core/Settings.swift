@@ -25,11 +25,15 @@ enum DevMode {
     static let checkRequested = flag("lucidCheck")
     /// The headless check runs only against a throwaway folder (LUCID_SUPPORT_DIR), never your real library.
     static let check = checkRequested && ProcessInfo.processInfo.environment["LUCID_SUPPORT_DIR"] != nil
+    /// `-lucidBench <video>` was passed: the headless playback benchmark (App/Headless.swift), which never draws.
+    static let benchRequested = arg("lucidBench") != nil
+    /// Like the check, the benchmark runs only with LUCID_SUPPORT_DIR set (a throwaway folder).
+    static let bench = benchRequested && ProcessInfo.processInfo.environment["LUCID_SUPPORT_DIR"] != nil
     static let checkSuite = "com.jedbrn.lucid.devcheck"
-    /// Settings storage: during the check, a separate suite that starts empty every run, so the check never changes
-    /// your real preferences (shortcuts, update check, location).
+    /// Settings storage: during the check or the benchmark, a separate suite that starts empty every run, so they
+    /// never read or change your real preferences (shortcuts, update check, location, speed).
     static let defaults: UserDefaults = {
-        guard check, let s = UserDefaults(suiteName: checkSuite) else { return .standard }
+        guard check || bench, let s = UserDefaults(suiteName: checkSuite) else { return .standard }
         s.removePersistentDomain(forName: checkSuite)
         return s
     }()
