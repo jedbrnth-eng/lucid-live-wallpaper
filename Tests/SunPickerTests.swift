@@ -42,6 +42,10 @@ func registerSunPickerTests() {
         expectEqual(p.dawn, "pink"); expectEqual(p.dusk, "orange")
         let lone = SunPicker.pick([orange, starfield, noon])
         expectEqual(lone.dusk, "orange"); expectEqual(lone.dawn, nil)
+        // A mauve dawn sky has almost as much blue as red: still dawn, never dusk.
+        let mauve = SunCandidate(id: "mauve", title: "Lagoon", light: LightStats.from(rgba: px(126, 80, 117))!)
+        let m = SunPicker.pick([mauve, starfield, noon])
+        expectEqual(m.dawn, "mauve"); expectEqual(m.dusk, nil)
     }
     test("Sun picks: words in the title beat a close call on colour") {
         let rise = c("rise", "Sunrise over the bay", luma: 0.4, warmth: 0.3)

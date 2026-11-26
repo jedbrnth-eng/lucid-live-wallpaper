@@ -74,11 +74,15 @@ enum SunPicker {
         }
     }
 
-    /// Dawn and dusk only take a wallpaper that is named like one, or warm and neither black nor washed out.
+    /// Dawn and dusk only take a wallpaper that is named like one, or neither black nor washed out and warm
+    /// (dusk), or warm or rosy (dawn: mauve and pink skies carry nearly as much blue as red).
     static func qualifies(_ c: SunCandidate, _ part: DayPart) -> Bool {
+        let l = c.light, lit = l.luma >= 0.12 && l.luma <= 0.75
+        let rosy = l.rgb.count == 3 && l.rgb[0] - l.rgb[1] >= 0.1 && l.rgb[2] - l.rgb[1] >= 0.05
         switch part {
         case .day, .night: return true
-        case .dawn, .dusk: return hasWord(c.title, part) || (c.light.warmth >= 0.05 && c.light.luma >= 0.12 && c.light.luma <= 0.75)
+        case .dusk: return hasWord(c.title, part) || (lit && l.warmth >= 0.05)
+        case .dawn: return hasWord(c.title, part) || (lit && (l.warmth >= 0.05 || rosy))
         }
     }
 
