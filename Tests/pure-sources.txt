@@ -4,6 +4,7 @@ Sources/Lucid/Audio/Reactive.swift
 Sources/Lucid/DayNight/SunTimes.swift
 Sources/Lucid/Core/Models.swift
 Sources/Lucid/Engine/PausePolicy.swift
+Sources/Lucid/Engine/PowerMonitor.swift
 Sources/Lucid/Media/ImportPolicy.swift
 Sources/Lucid/Store/PlaylistScheduler.swift
 Sources/Lucid/Hotkeys/Hotkey.swift
