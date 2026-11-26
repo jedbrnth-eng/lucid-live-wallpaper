@@ -382,19 +382,28 @@ import ImageIO
     }
     func resetAudioLooks() { surfaces.values.forEach { $0.resetReactive() } }
 
+    /// Reads the power source; called at launch and whenever macOS reports a change (unplug, plug in, charge).
     private func checkBattery() {
         guard let blob = IOPSCopyPowerSourcesInfo()?.takeRetainedValue(),
               let type = IOPSGetProvidingPowerSourceType(blob)?.takeRetainedValue() as String? else { return }
-        let b = type == "Battery Power"
-        var pct: Int?
-        if let list = IOPSCopyPowerSourcesList(blob)?.takeRetainedValue() as? [CFTypeRef] {
-            for ps in list {
-                guard let d = IOPSGetPowerSourceDescription(blob, ps)?.takeUnretainedValue() as? [String: Any],
-                      let cur = d[kIOPSCurrentCapacityKey] as? Int, let mx = d[kIOPSMaxCapacityKey] as? Int, mx > 0 else { continue }
-                pct = Int((Double(cur) / Double(mx) * 100).rounded())
-            }
+        let list = IOPSCopyPowerSourcesList(blob)?.takeRetainedValue() as? [CFTypeRef] ?? []
+        let sources = list.compactMap { IOPSGetPowerSourceDescription(blob, $0)?.takeUnretainedValue() as? [String: Any] }
+        let r = PowerSources.reading(providing: type, sources: sources)
+        if r.onBattery != power.onBattery || r.percent != power.batteryPercent {
+            power.onBattery = r.onBattery; power.batteryPercent = r.percent; updatePlayback()
         }
-        if b != power.onBattery || pct != power.batteryPercent { power.onBattery = b; power.batteryPercent = pct; updatePlayback() }
+    }
+
+    /// macOS pushes power-source changes (IOPSNotificationCreateRunLoopSource), so unplugging pauses at once
+    /// instead of at the next poll. The engine lives as long as the app, so the unretained pointer stays valid.
+    private func observePowerSource() {
+        let me = Unmanaged.passUnretained(self).toOpaque()
+        guard let src = IOPSNotificationCreateRunLoopSource({ ctx in
+            guard let ctx else { return }
+            let engine = Unmanaged<LucidEngine>.fromOpaque(ctx).takeUnretainedValue()
+            MainActor.assumeIsolated { engine.checkBattery() }
+        }, me)?.takeRetainedValue() else { return }
+        CFRunLoopAddSource(CFRunLoopGetMain(), src, .defaultMode)
     }
 
     /// Test hook for the headless dev check: pretend a power condition (never touches the real system).
@@ -419,8 +428,9 @@ import ImageIO
             MainActor.assumeIsolated { self?.power.lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled; self?.updatePlayback() } })
         observers.append(NotificationCenter.default.addObserver(forName: ProcessInfo.thermalStateDidChangeNotification, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.power.thermal = Self.thermal(); self?.updatePlayback() } })
+        observePowerSource()
         timers.append(Timer.scheduledTimer(withTimeInterval: 20, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.checkBattery(); self?.checkIdleRelease() } })
+            MainActor.assumeIsolated { self?.checkIdleRelease() } })
         timers.append(Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.sampleCPU() } })
         timers.append(Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in
