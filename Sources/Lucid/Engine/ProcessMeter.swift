@@ -58,6 +58,13 @@ enum ProcessMeter {
         return s.count % 2 == 1 ? s[m] : round2((s[m - 1] + s[m]) / 2)
     }
 
+    /// The whole Mac's 1-minute load average. Other work skews CPU and energy figures, so the benchmark records it
+    /// next to every measurement; compare builds only at similar load, or by ratios taken within one run.
+    static func load1() -> Double {
+        var l = [Double](repeating: 0, count: 3)
+        return getloadavg(&l, 3) > 0 ? round2(l[0]) : -1
+    }
+
     static var cpuBrand: String {
         var size = 0
         sysctlbyname("machdep.cpu.brand_string", nil, &size, nil, 0)

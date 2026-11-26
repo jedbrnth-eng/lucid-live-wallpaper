@@ -36,5 +36,6 @@ func registerBenchTests() {
         expect(a.footprintBytes > 1_000_000, "footprint \(a.footprintBytes)")
         expect(b.cpuNanos > a.cpuNanos, "CPU time \(a.cpuNanos) -> \(b.cpuNanos) (work \(x))")
         expect(b.at >= a.at)
+        expect(ProcessMeter.load1() >= 0, "load average readable")
     }
 }

@@ -8,7 +8,8 @@
 // ProcessMeter: CPU %, the kernel's CPU energy estimate, memory footprint and wakeups. Rounds are interleaved
 // and each figure is the median of the rounds.
 // Not included: the window server compositing each frame, the display itself and the media engine's own power,
-// so a wallpaper on screen costs more in total. Use the numbers to compare loop types and Lucid builds.
+// so a wallpaper on screen costs more in total. Other work on the Mac skews the figures, so every run records the
+// 1-minute load average; compare builds at similar load, or by ratios within one run (for example 2 displays vs 1).
 import AppKit
 import AVFoundation
 
@@ -30,6 +31,7 @@ import AVFoundation
         guard let screen = NSScreen.screens.first else { return ["error": "no screen"] }
         guard !files.isEmpty else { return ["error": "no video found"] }
         var measured: [String: [ProcessRates]] = [:]
+        var loads: [String: [Double]] = [:]
         var shape: [String: [String: Any]] = [:]
         for _ in 0..<rounds {
             for f in files {
@@ -38,10 +40,11 @@ import AVFoundation
                     let surfaces = (0..<n).map { ScreenSurface(screen: screen, key: "bench-\($0)", assignment: a) }
                     surfaces.forEach { $0.setRunning(true) }
                     await wait(warmUp)
-                    let s0 = ProcessMeter.sample()
+                    let s0 = ProcessMeter.sample(), l0 = ProcessMeter.load1()
                     await wait(seconds)
-                    let s1 = ProcessMeter.sample()
+                    let s1 = ProcessMeter.sample(), l1 = ProcessMeter.load1()
                     measured["\(f)|\(n)", default: []].append(ProcessMeter.rates(from: s0, to: s1))
+                    loads["\(f)|\(n)", default: []].append(((l0 + l1) / 2 * 10).rounded() / 10)
                     let times = surfaces.compactMap { $0.player?.currentTime().seconds }
                     shape["\(f)|\(n)"] = [
                         "players": Set(surfaces.compactMap { $0.player.map(ObjectIdentifier.init) }).count,
@@ -66,11 +69,14 @@ import AVFoundation
                 row["footprint_mb"] = ProcessMeter.median(rs.map(\.footprintMB))
                 row["wakeups_per_s"] = ProcessMeter.median(rs.map(\.wakeupsPerSecond))
                 row["cpu_pct_rounds"] = rs.map(\.cpuPercent)
+                row["load1_rounds"] = loads["\(f)|\(n)"] ?? []
+                row["load1"] = ProcessMeter.median(loads["\(f)|\(n)"] ?? [])
                 for (k, v) in shape["\(f)|\(n)"] ?? [:] { row[k] = v }
                 results.append(row)
             }
         }
         return ["seconds_per_run": seconds, "warm_up_seconds": warmUp, "rounds": rounds, "cpu": ProcessMeter.cpuBrand,
+                "cores": ProcessInfo.processInfo.activeProcessorCount,
                 "os": ProcessInfo.processInfo.operatingSystemVersionString, "results": results,
                 "scope": "this process only: decode and playback; not the window server, the display or media-engine power"]
     }
