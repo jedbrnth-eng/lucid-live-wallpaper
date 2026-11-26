@@ -3,9 +3,12 @@
 // Part of Lucid: https://github.com/jedbrnth-eng/lucid-live-wallpaper
 
 // Development runs that must never draw anything: no main window, no menu-bar item, no Dock icon, no desktop
-// window and no desktop picture. The SwiftUI app is never started (see LucidMain), the process can't take focus
-// (activation policy .prohibited), and wallpaper windows are built but never ordered front. Safe to run while
-// your everyday copy of Lucid plays. Used by the playback benchmark:
+// window and no desktop picture, and no Keychain. The SwiftUI app is never started (see LucidMain), the process
+// can't take focus (activation policy .prohibited), wallpaper windows are built but refuse to be ordered in
+// (WallpaperWindow) and Keychain reads return nothing. Safe to run while your everyday copy of Lucid plays.
+// ./headless-check.sh proves it for the check from outside the app. The integration check (DevCheck.swift):
+//   LUCID_SUPPORT_DIR=/tmp/lucid-check build/Lucid.app/Contents/MacOS/Lucid -lucidCheck YES
+// It writes check.json in LUCID_SUPPORT_DIR and quits. The playback benchmark:
 //   LUCID_SUPPORT_DIR=/tmp/lucid-bench build/Lucid.app/Contents/MacOS/Lucid -lucidBench <video or folder>
 //       [-benchDisplays 1,2,3] [-benchSeconds 20] [-benchRounds 3]
 // It writes bench.json in LUCID_SUPPORT_DIR and quits. See PlaybackBench.swift for what is measured.
@@ -14,15 +17,28 @@
 import AppKit
 
 @MainActor enum Headless {
-    /// True for the whole headless run: ScreenSurface never orders its window front.
-    private(set) static var active = false
+    /// True for the whole run when this launch is a headless one (decided from the command line before anything starts).
+    nonisolated static var active: Bool { DevMode.headless }
+
+    static func runCheck() {
+        guard DevMode.check else {
+            FileHandle.standardError.write(Data("lucidCheck needs LUCID_SUPPORT_DIR (a throwaway folder); refusing to run it on your library.\n".utf8))
+            exit(2)
+        }
+        LucidEngine.setsDesktopPicture = false
+        let app = NSApplication.shared
+        app.setActivationPolicy(.prohibited)
+        let store = Store.shared
+        store.engine.refresh()
+        Task { @MainActor in await DevCheck.run(store) }
+        app.run()
+    }
 
     static func runBench() {
         guard DevMode.bench, let target = DevMode.arg("lucidBench") else {
             FileHandle.standardError.write(Data("lucidBench needs LUCID_SUPPORT_DIR (a throwaway folder).\n".utf8))
             exit(2)
         }
-        active = true
         LucidEngine.setsDesktopPicture = false
         let app = NSApplication.shared
         app.setActivationPolicy(.prohibited)
@@ -45,7 +61,6 @@ import AppKit
             FileHandle.standardError.write(Data("lucidShots needs LUCID_SUPPORT_DIR (a throwaway folder).\n".utf8))
             exit(2)
         }
-        active = true
         LucidEngine.setsDesktopPicture = false
         let app = NSApplication.shared
         app.setActivationPolicy(.prohibited)

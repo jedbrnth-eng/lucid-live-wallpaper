@@ -23,8 +23,15 @@ extension NSScreen {
 
 // MARK: - Window
 
+/// In a headless development run (Headless.swift) these windows are built and played into but never put on screen:
+/// every way of ordering one in is refused here, so no code path (a new wallpaper, a cross-fade) can draw.
 final class WallpaperWindow: NSWindow {
+    /// Wallpaper windows made and not yet closed (the dev check counts what a change left behind).
+    private(set) static var open = 0
+    private var counted = true
+
     init(screen: NSScreen) {
+        WallpaperWindow.open += 1
         super.init(contentRect: screen.frame, styleMask: [.borderless], backing: .buffered, defer: false)
         level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopWindow)))
         collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
@@ -40,6 +47,15 @@ final class WallpaperWindow: NSWindow {
     }
     override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
+    override func orderFrontRegardless() { if !Headless.active { super.orderFrontRegardless() } }
+    override func order(_ place: NSWindow.OrderingMode, relativeTo other: Int) {
+        if Headless.active && place != .out { return }
+        super.order(place, relativeTo: other)
+    }
+    override func close() {
+        if counted { counted = false; WallpaperWindow.open -= 1 }
+        super.close()
+    }
 }
 
 // MARK: - Layer host for video and image wallpapers
@@ -183,7 +199,7 @@ final class SurfaceHostView: NSView {
         }
         host?.options = assignment.options ?? WallpaperOptions()
         applyLook()
-        if !Headless.active { window.orderFrontRegardless() }   // headless runs (benchmark) never draw
+        window.orderFrontRegardless()
     }
 
     /// This window's video is playing (a shared player may also run for another display while this one is covered).

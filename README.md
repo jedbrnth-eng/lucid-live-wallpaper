@@ -282,6 +282,8 @@ LUCID_SUPPORT_DIR=/tmp/lucid-bench build/Lucid.app/Contents/MacOS/Lucid -lucidBe
 
 Screenshots of app screens, also headless, with a generated demo library (no real wallpapers): `LUCID_SUPPORT_DIR=/tmp/lucid-shots build/Lucid.app/Contents/MacOS/Lucid -lucidShots /tmp/lucid-shots/out`.
 
+End-to-end check, also headless: `LUCID_SUPPORT_DIR=/tmp/lucid-check build/Lucid.app/Contents/MacOS/Lucid -lucidCheck YES` writes `check.json` and quits. `./headless-check.sh` runs it and fails if it shows any window, changes a desktop picture or calls the Keychain (CI runs it after every build).
+
 The benchmark plays the clip (or every video in a folder) the way the desktop does, on 1 and 2 simulated displays, and writes `bench.json` with Lucid's CPU %, CPU energy, memory and wakeups, plus the Mac's load average for each run. It measures Lucid only, not the window server or the display. Compare builds at similar load, or by ratios within one run.
 
 `selftest.sh` writes `selftest.json` in `~/Library/Application Support/Lucid/`. Inspect its JSON results: the wrapper's exit code alone does not prove every source passed. It uses the normal Lucid app environment, so don't run it alongside your everyday copy as if it were an isolated unit test. The catalog-builder command rewrites `catalog.json`; review the diff before committing it.

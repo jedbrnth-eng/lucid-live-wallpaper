@@ -2,12 +2,14 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Part of Lucid: https://github.com/jedbrnth-eng/lucid-live-wallpaper
 
-// Headless integration check for development builds. Runs only with BOTH -lucidCheck YES on the command line and
-// LUCID_SUPPORT_DIR set (it refuses to touch your real library), and keeps its settings in a separate defaults suite:
+// Headless integration check for development builds (started by Headless.swift, so nothing is ever on screen and
+// the Keychain is never read). Runs only with BOTH -lucidCheck YES on the command line and LUCID_SUPPORT_DIR set
+// (it refuses to touch your real library), and keeps its settings in a separate defaults suite:
 //   LUCID_SUPPORT_DIR=/tmp/lucid-check Lucid.app/Contents/MacOS/Lucid -lucidCheck YES
 // Sets a Day/Night pair of generated images, flips the phase, checks the cross-fade released the old window,
 // then feeds synthetic bass to an audio-reactive look. Writes check.json and quits.
-// Never starts audio capture and never changes the real desktop picture.
+// Never starts audio capture and never changes the real desktop picture. ./headless-check.sh runs it and fails if
+// it shows a window, changes a desktop picture or calls the Keychain.
 import SwiftUI
 import AppKit
 import AVFoundation
@@ -27,7 +29,7 @@ import AVFoundation
     }
 
     static func run(_ store: Store) async {
-        var r: [String: Any] = ["support": Paths.support.path]
+        var r: [String: Any] = ["support": Paths.support.path, "headless": Headless.active]
         let engine = store.engine
         guard let main = NSScreen.screens.first else { r["error"] = "no screen"; finish(r); return }
 
@@ -314,7 +316,7 @@ import AVFoundation
             e.clear(screenKey: nil)
             await wait(LucidEngine.crossfade + 1.5)
             r["review_m5_fading_after_clear"] = e.fadingCount
-            r["review_m5_wallpaper_windows_after_clear"] = NSApp.windows.filter { $0 is WallpaperWindow && $0.isVisible }.count
+            r["review_m5_wallpaper_windows_after_clear"] = WallpaperWindow.open
         }
         // L1: turning location off forgets the saved fix.
         Pref.dayNightUseLocation = true
@@ -442,11 +444,10 @@ import AVFoundation
             it.localPath = path
             return it
         }
-        func host<V: View>(_ view: V) -> (NSWindow, NSHostingView<AnyView>) {
+        func host<V: View>(_ view: V) -> (NSWindow, NSHostingView<AnyView>) {   // a real window, never on screen
             let h = NSHostingView(rootView: AnyView(view.frame(width: 640, height: 200)))
             let w = NSWindow(contentRect: NSRect(x: -4000, y: -4000, width: 640, height: 200), styleMask: [.borderless], backing: .buffered, defer: false)
             w.contentView = h
-            w.orderFrontRegardless()
             return (w, h)
         }
         func players(_ v: NSView) -> [PreviewPlayerView] { (v as? PreviewPlayerView).map { [$0] } ?? v.subviews.flatMap(players) }
@@ -585,7 +586,15 @@ import AVFoundation
         shot("menu-bar-menu", VStack(alignment: .leading, spacing: 6) { MenuContent() }.padding(12), width: 360)
     }
 
+    /// This process's windows on screen right now, as the window server sees them (0 in a headless run).
+    private static func windowsOnScreen() -> Int {
+        let list = CGWindowListCopyWindowInfo(.optionOnScreenOnly, kCGNullWindowID) as? [[String: Any]] ?? []
+        return list.filter { ($0[kCGWindowOwnerPID as String] as? Int32) == getpid() }.count
+    }
+
     private static func finish(_ r: [String: Any]) {
+        var r = r
+        r["windows_on_screen_at_end"] = windowsOnScreen()
         let u = Paths.support.appendingPathComponent("check.json")
         if let d = try? JSONSerialization.data(withJSONObject: r, options: [.prettyPrinted, .sortedKeys]) { try? d.write(to: u) }
         NSApp.terminate(nil)
