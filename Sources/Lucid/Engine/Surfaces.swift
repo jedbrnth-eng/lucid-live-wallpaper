@@ -144,25 +144,26 @@ final class SurfaceHostView: NSView {
     private(set) var assignment: Assignment
     let window: WallpaperWindow
     private(set) var host: SurfaceHostView?
+    /// The looping player this window shows, shared with every other window showing the same file at the same speed.
     private(set) var player: AVQueuePlayer?
-    private var looper: AVPlayerLooper?
+    /// The speed this window's player was made for. A new speed means a new window (LucidEngine.refresh cross-fades).
+    let playSpeed: Double
+    private let holder = UUID().uuidString
+    private var wantsRun = false
     var visible = true
     var occlusionObserver: NSObjectProtocol?
+
+    /// Effective playback speed of an assignment (its own speed, else the app-wide one).
+    static func speed(of a: Assignment) -> Double { (a.options ?? WallpaperOptions()).effectiveSpeed(default: Pref.speed) }
 
     init(screen: NSScreen, key: String, assignment: Assignment) {
         self.key = key
         self.assignment = assignment
+        playSpeed = Self.speed(of: assignment)
         window = WallpaperWindow(screen: screen)
         switch assignment.kind {
         case .video:
-            let p = AVQueuePlayer()
-            p.isMuted = true
-            p.preventsDisplaySleepDuringVideoPlayback = false
-            p.automaticallyWaitsToMinimizeStalling = false
-            let item = AVPlayerItem(url: URL(fileURLWithPath: assignment.path))
-            item.preferredForwardBufferDuration = 2
-            looper = AVPlayerLooper(player: p, templateItem: item)
-            p.defaultRate = speed
+            let p = SharedPlayers.shared.acquire(path: assignment.path, speed: playSpeed, holder: holder)
             player = p
             let l = AVPlayerLayer(); l.player = p
             host = SurfaceHostView(content: l)
@@ -185,12 +186,13 @@ final class SurfaceHostView: NSView {
         if !Headless.active { window.orderFrontRegardless() }   // headless runs (benchmark) never draw
     }
 
-    private var speed: Float { Float((assignment.options ?? WallpaperOptions()).effectiveSpeed(default: Pref.speed)) }
-
+    /// This window's video is playing (a shared player may also run for another display while this one is covered).
     var isRunning: Bool {
-        if let p = player { return p.rate > 0 }
+        if let p = player { return wantsRun && p.rate > 0 }
         return true
     }
+    /// Whether this window can keep showing `a` as it is: same media, and for a video the same speed.
+    func canShow(_ a: Assignment) -> Bool { assignment.sameMedia(a) && (a.kind != .video || Self.speed(of: a) == playSpeed) }
 
     private static func loadImage(_ path: String, maxPixels: CGFloat) -> CGImage? {
         guard let src = CGImageSourceCreateWithURL(URL(fileURLWithPath: path) as CFURL, nil) else { return nil }
@@ -203,25 +205,19 @@ final class SurfaceHostView: NSView {
         if window.frame != screen.frame { window.setFrame(screen.frame, display: true) }
     }
 
-    /// Look options changed but the media did not: update in place, no reload.
+    /// Look options changed but the media and speed did not: update in place, no reload.
     func update(_ a: Assignment) {
         assignment = a
         if !(a.reactive?.any ?? false) { host?.applyReactive(ReactiveLook()) }
         let o = a.options ?? WallpaperOptions()
         if host?.options != o { host?.options = o }
-        if let p = player, p.rate > 0, p.rate != speed { p.defaultRate = speed; p.rate = speed }
     }
 
-    func applyLook() {
-        host?.applyLook()
-        player?.defaultRate = speed
-    }
+    func applyLook() { host?.applyLook() }
 
     func setRunning(_ run: Bool) {
-        if let p = player {
-            let r = speed
-            if run { if p.rate != r { p.defaultRate = r; p.rate = r } } else if p.rate != 0 { p.pause() }
-        }
+        wantsRun = run
+        if player != nil { SharedPlayers.shared.setRunning(run, path: assignment.path, speed: playSpeed, holder: holder) }
     }
 
     func deliver(_ frame: AudioFrame) {
@@ -232,10 +228,7 @@ final class SurfaceHostView: NSView {
 
     func close() {
         if let o = occlusionObserver { NotificationCenter.default.removeObserver(o); occlusionObserver = nil }
-        player?.pause()
-        looper?.disableLooping()
-        looper = nil
-        player?.removeAllItems()
+        if player != nil { SharedPlayers.shared.release(path: assignment.path, speed: playSpeed, holder: holder) }
         player = nil
         window.orderOut(nil)
         window.contentView = nil

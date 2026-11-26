@@ -191,7 +191,7 @@ import ImageIO
     func togglePause() { state.userPaused.toggle(); save(); updatePlayback() }
     func applyLook() {
         for s in surfaces.values { s.applyLook() }
-        updatePlayback()
+        refresh()   // a new app-wide speed cross-fades into a player made for it
     }
 
     /// Day/Night phase changed (or the clock/time zone did): show the right wallpaper with a cross-fade.
@@ -250,13 +250,17 @@ import ImageIO
         }
         for (k, p) in surfaces where wanted[k] == nil { p.close(); surfaces[k] = nil }
         for (k, (s, a)) in wanted {
-            if let p = surfaces[k], p.assignment.sameMedia(a) {
+            if let p = surfaces[k], p.canShow(a) {
                 p.move(to: s)
                 if p.assignment != a { p.update(a) }
                 continue
             }
             let old = surfaces[k]
             let n = ScreenSurface(screen: s, key: k, assignment: a)
+            // Same video at a new speed: start the new player where the old one is, so the cross-fade is seamless.
+            if let o = old, o.assignment.sameMedia(a), let t = o.player?.currentTime(), let np = n.player, np.rate == 0 {
+                np.seek(to: t, toleranceBefore: .zero, toleranceAfter: .zero)
+            }
             surfaces[k] = n
             n.occlusionObserver = NotificationCenter.default.addObserver(forName: NSWindow.didChangeOcclusionStateNotification, object: n.window, queue: .main) { [weak self, weak n] _ in
                 MainActor.assumeIsolated {
@@ -451,7 +455,7 @@ import ImageIO
                                 "onBattery": power.onBattery, "batteryPercent": power.batteryPercent ?? NSNull(), "lowPower": power.lowPower,
                                 "locked": power.locked, "thermal": power.thermal.rawValue, "cpuBusy": power.cpuBusy, "parked": parked,
                                 "statusText": statusText, "weather": weatherNow()?.rawValue ?? NSNull(), "phase": phase().rawValue, "part": part().rawValue,
-                                "audioNeeded": audioNeeded, "fading": fading.count, "screens": screens]
+                                "audioNeeded": audioNeeded, "fading": fading.count, "videoPlayers": SharedPlayers.shared.count, "screens": screens]
         if let d = try? JSONSerialization.data(withJSONObject: j, options: [.prettyPrinted, .sortedKeys]) { try? d.write(to: Paths.status) }
     }
 }
