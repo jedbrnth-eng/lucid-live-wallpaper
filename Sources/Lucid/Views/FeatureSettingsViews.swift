@@ -102,6 +102,8 @@ struct DayNightSheet: View {
     @State private var nightID = ""
     @State private var dawnID = ""
     @State private var duskID = ""
+    /// The four slots hold Lucid's suggestion (by the light in each wallpaper), not a saved rule.
+    @State private var suggested = false
 
     private var choices: [WallItem] {
         store.library.filter(\.isLocalReady)
@@ -110,9 +112,38 @@ struct DayNightSheet: View {
         it.title + (it.kind == .image ? " · photo" : "")
     }
 
+    /// Fills the four slots from the library: darkest for night, brightest for day, warm ones for dawn and dusk.
+    private func pickForMe() async {
+        let p = await store.sunPicks()
+        guard let d = p.day, let n = p.night else { return }
+        dayID = d; nightID = n; dawnID = p.dawn ?? ""; duskID = p.dusk ?? ""
+        suggested = true
+    }
+
+    private var strip: [SunStrip.Slot] {
+        let starts = dayNight.schedule().partStarts(onLocalDayOf: Date())
+        return [(DayPart.dawn, dawnID), (.day, dayID), (.dusk, duskID), (.night, nightID)].map { part, id in
+            let it = choices.first { $0.id == id }
+            let tint = it.flatMap { store.light[$0.id]?.rgb }.flatMap { $0.count == 3 ? Color(red: $0[0], green: $0[1], blue: $0[2]) : nil }
+            return SunStrip.Slot(part: part, title: it?.title, thumbURL: it?.thumbURL, thumbPath: it?.thumbPath,
+                                 starts: starts[part], tint: tint, isNow: dayNight.part == part)
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Header(title: "Day/Night · \(target.name)", subtitle: "One wallpaper from sunrise to sunset, another at night, with a short cross-fade.")
+            HStack(alignment: .top) {
+                Header(title: "Day/Night · \(target.name)", subtitle: "One wallpaper from sunrise to sunset, another at night, with a short cross-fade.")
+                Spacer(minLength: 12)
+                Button { Task { await pickForMe() } } label: { Label("Pick for me", systemImage: "sun.horizon") }
+                    .buttonStyle(.pill).disabled(choices.count < 2)
+                    .help("Choose by the light in each wallpaper: darkest for night, brightest for day, warm ones for dawn and dusk")
+            }
+            SunStrip(slots: strip)
+            if suggested {
+                Label("Picked by the light in each wallpaper. Change any of them below.", systemImage: "sparkles")
+                    .font(.caption).foregroundStyle(Theme.muted)
+            }
             Picker("☀︎ Day", selection: $dayID) {
                 Text("Choose…").tag("")
                 ForEach(choices) { Text(label($0)).tag($0.id) }
@@ -148,11 +179,13 @@ struct DayNightSheet: View {
                 .disabled(dayID.isEmpty || nightID.isEmpty)
             }
         }
-        .padding(20).frame(width: 540)
+        .padding(20).frame(width: 600)
         .onAppear {
             let scope = target.screenKey ?? EngineState.allKey
             if let r = engine.state.dayNight?[scope] {
                 dayID = r.day.itemID; nightID = r.night.itemID; dawnID = r.dawn?.itemID ?? ""; duskID = r.dusk?.itemID ?? ""
+            } else {
+                Task { await pickForMe() }   // nothing set yet: start from a suggestion
             }
         }
     }

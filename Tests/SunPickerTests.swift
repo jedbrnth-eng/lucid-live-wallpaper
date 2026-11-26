@@ -34,6 +34,15 @@ func registerSunPickerTests() {
         expectEqual(p.dusk, "ember"); expectEqual(p.dawn, "rose")
         expectEqual(p.night, "stars"); expectEqual(p.day, "noon")
     }
+    test("Sun picks: a soft pink sky goes to dawn, an orange one to dusk, and a lone warm picture to dusk") {
+        func px(_ r: UInt8, _ g: UInt8, _ b: UInt8) -> [UInt8] { Array(repeating: [r, g, b, 255], count: 16).flatMap { $0 } }
+        let pink = SunCandidate(id: "pink", title: "Lagoon", light: LightStats.from(rgba: px(160, 100, 132))!)
+        let orange = SunCandidate(id: "orange", title: "Ember", light: LightStats.from(rgba: px(196, 92, 52))!)
+        let p = SunPicker.pick([pink, orange, starfield, noon])
+        expectEqual(p.dawn, "pink"); expectEqual(p.dusk, "orange")
+        let lone = SunPicker.pick([orange, starfield, noon])
+        expectEqual(lone.dusk, "orange"); expectEqual(lone.dawn, nil)
+    }
     test("Sun picks: words in the title beat a close call on colour") {
         let rise = c("rise", "Sunrise over the bay", luma: 0.4, warmth: 0.3)
         let set = c("set", "Sunset pier", luma: 0.4, warmth: 0.25)
@@ -53,6 +62,26 @@ func registerSunPickerTests() {
         expectEqual(a, b)
         let ids = [a.dawn, a.day, a.dusk, a.night].compactMap { $0 }
         expectEqual(Set(ids).count, ids.count, "no wallpaper twice")
+    }
+    test("Sun picks: today's start of dawn, day, dusk and night (fixed times 07:00 to 19:00)") {
+        let utc = TimeZone(identifier: "UTC")!
+        let s = DayNightSchedule(mode: .manual(dayStartMinute: 7 * 60, nightStartMinute: 19 * 60), timeZone: utc)
+        let midnight = 1_795_000_000 - 1_795_000_000 % 86_400   // a UTC midnight
+        let noon = Date(timeIntervalSince1970: TimeInterval(midnight + 12 * 3600))
+        let starts = s.partStarts(onLocalDayOf: noon)
+        let day0 = noon.addingTimeInterval(-12 * 3600)
+        func hour(_ p: DayPart) -> Double? { starts[p].map { $0.timeIntervalSince(day0) / 3600 } }
+        expectEqual(hour(.dawn), 7); expectEqual(hour(.day), 8); expectEqual(hour(.dusk), 18); expectEqual(hour(.night), 19)
+    }
+    test("Sun picks: with real sun times the four parts come in order (Bangkok)") {
+        let bkk = TimeZone(identifier: "Asia/Bangkok")!
+        let s = DayNightSchedule(mode: .sun(latitude: 13.75, longitude: 100.5), timeZone: bkk)
+        let starts = s.partStarts(onLocalDayOf: Date(timeIntervalSince1970: 1_795_000_000))
+        guard let a = starts[.dawn], let b = starts[.day], let c = starts[.dusk], let d = starts[.night] else {
+            expect(false, "all four parts happen in Bangkok: \(starts)"); return
+        }
+        expect(a < b && b < c && c < d, "dawn < day < dusk < night: \(starts)")
+        expect(b.timeIntervalSince(a) > 15 * 60 && b.timeIntervalSince(a) < 90 * 60, "dawn lasts tens of minutes")
     }
     test("Sun picks: fewer than two wallpapers picks nothing") {
         expectEqual(SunPicker.pick([]), SunPicks())

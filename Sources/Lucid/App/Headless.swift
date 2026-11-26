@@ -9,6 +9,8 @@
 //   LUCID_SUPPORT_DIR=/tmp/lucid-bench build/Lucid.app/Contents/MacOS/Lucid -lucidBench <video or folder>
 //       [-benchDisplays 1,2,3] [-benchSeconds 20] [-benchRounds 3]
 // It writes bench.json in LUCID_SUPPORT_DIR and quits. See PlaybackBench.swift for what is measured.
+// Screenshots of app screens with a generated demo library (DevShots.swift):
+//   LUCID_SUPPORT_DIR=/tmp/lucid-shots build/Lucid.app/Contents/MacOS/Lucid -lucidShots <output folder>
 import AppKit
 
 @MainActor enum Headless {
@@ -34,6 +36,23 @@ import AppKit
             if let d = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) { try? d.write(to: out) }
             print("BENCH \(out.path)")
             exit(0)
+        }
+        app.run()
+    }
+
+    static func runShots() {
+        guard DevMode.shots, let out = DevMode.arg("lucidShots") else {
+            FileHandle.standardError.write(Data("lucidShots needs LUCID_SUPPORT_DIR (a throwaway folder).\n".utf8))
+            exit(2)
+        }
+        active = true
+        LucidEngine.setsDesktopPicture = false
+        let app = NSApplication.shared
+        app.setActivationPolicy(.prohibited)
+        Task { @MainActor in
+            let written = await DevShots.run(to: URL(fileURLWithPath: out, isDirectory: true))
+            written.forEach { print("SHOT \($0)") }
+            exit(written.isEmpty ? 1 : 0)
         }
         app.run()
     }

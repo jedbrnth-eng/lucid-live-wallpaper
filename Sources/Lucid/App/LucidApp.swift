@@ -118,7 +118,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 enum LucidMain {
     static func main() {
         MainActor.assumeIsolated {
-            if DevMode.benchRequested { Headless.runBench() } else { LucidApp.main() }
+            if DevMode.benchRequested { Headless.runBench() }
+            else if DevMode.shotsRequested { Headless.runShots() }
+            else { LucidApp.main() }
         }
     }
 }

@@ -4,8 +4,8 @@
 
 // "Pick for me" in Day & Night: which wallpaper suits dawn, day, dusk and night, judged by the light in each
 // picture (how bright, how warm, how colourful) with words in its title as a tie-breaker. The darkest goes to
-// night, the brightest to day, warm middle-bright ones to dusk (the warmest) and dawn. Dawn and dusk stay empty
-// when nothing looks like them, which leaves plain Day/Night. Pure, so it is unit-tested.
+// night, the brightest to day, warm middle-bright ones to dusk (orange, the warmest) and dawn (softer, pinker).
+// Dawn and dusk stay empty when nothing looks like them, which leaves plain Day/Night. Pure, so it is unit-tested.
 import Foundation
 
 /// The light in a picture, from its average colour.
@@ -13,6 +13,8 @@ struct LightStats: Equatable, Codable {
     var luma: Double         // 0 black … 1 white (Rec. 709 weights)
     var warmth: Double       // -1 blue … +1 orange (red minus blue)
     var saturation: Double   // 0 grey … 1 vivid
+    /// Average colour (red, green, blue in 0…1) for drawing; empty when made from numbers alone.
+    var rgb: [Double] = []
 
     /// From RGBA bytes, any number of pixels (alpha ignored).
     static func from(rgba: [UInt8]) -> LightStats? {
@@ -27,7 +29,7 @@ struct LightStats: Equatable, Codable {
         }
         let k = Double(n)
         r /= k; g /= k; b /= k
-        return LightStats(luma: 0.2126 * r + 0.7152 * g + 0.0722 * b, warmth: r - b, saturation: sat / k)
+        return LightStats(luma: 0.2126 * r + 0.7152 * g + 0.0722 * b, warmth: r - b, saturation: sat / k, rgb: [r, g, b])
     }
 }
 
@@ -62,11 +64,13 @@ enum SunPicker {
     static func score(_ c: SunCandidate, _ part: DayPart) -> Double {
         let l = c.light, named = hasWord(c.title, part) ? 1.0 : 0
         let middle = max(0, 1 - abs(l.luma - 0.4) * 2.5)   // 1 at 40% brightness, 0 at black or 80%
+        // Pink skies carry more blue than green; orange ones more green than blue (needs the average colour).
+        let tilt = l.rgb.count == 3 ? l.rgb[2] - l.rgb[1] : 0
         switch part {
         case .night: return (1 - l.luma) * 2 + max(0, -l.warmth) * 0.5 + named * 1.2
         case .day: return l.luma * 2 + l.saturation * 0.3 - abs(l.warmth) * 0.5 + named * 0.6
-        case .dusk: return max(0, l.warmth) * 3 + middle + named * 1.5
-        case .dawn: return max(0, l.warmth) * 2.4 + middle + l.saturation * 0.3 + named * 1.5
+        case .dusk: return max(0, l.warmth) * 3 + middle + max(0, -tilt) + named * 1.5
+        case .dawn: return max(0, l.warmth) * 2 + middle + max(0, tilt) * 3 + named * 1.5
         }
     }
 
@@ -74,7 +78,7 @@ enum SunPicker {
     static func qualifies(_ c: SunCandidate, _ part: DayPart) -> Bool {
         switch part {
         case .day, .night: return true
-        case .dawn, .dusk: return hasWord(c.title, part) || (c.light.warmth >= 0.12 && c.light.luma >= 0.12 && c.light.luma <= 0.75)
+        case .dawn, .dusk: return hasWord(c.title, part) || (c.light.warmth >= 0.05 && c.light.luma >= 0.12 && c.light.luma <= 0.75)
         }
     }
 

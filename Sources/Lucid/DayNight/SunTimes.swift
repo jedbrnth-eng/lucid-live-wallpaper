@@ -198,6 +198,23 @@ struct DayNightSchedule {
         return candidates.filter { $0 > d }.min() ?? cal.date(byAdding: .day, value: 1, to: today)
     }
 
+    /// When each part starts on the local day of `d`: its first start after midnight. A part that doesn't come
+    /// that day (polar night, midnight sun) is missing. Used for the Day & Night sheet's timeline.
+    func partStarts(onLocalDayOf d: Date) -> [DayPart: Date] {
+        let cal = calendar
+        let start = cal.startOfDay(for: d)
+        guard let end = cal.date(byAdding: .day, value: 1, to: start) else { return [:] }
+        var out: [DayPart: Date] = [:]
+        var t = start, prev = part(at: start)
+        for _ in 0..<16 {
+            guard let b = nextBoundary(after: t), b < end else { break }
+            let p = part(at: b)
+            if p != prev, out[p] == nil { out[p] = b }
+            prev = p; t = b
+        }
+        return out
+    }
+
     /// The next instant strictly after `d` at which the phase may change.
     func nextChange(after d: Date) -> Date? {
         let cal = calendar

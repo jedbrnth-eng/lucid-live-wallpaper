@@ -113,7 +113,8 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
         if !stray.isEmpty { stray.forEach { adoptInFlight.insert($0.path) }; importFiles(stray, move: true, quiet: false) }
     }
 
-    func refreshKeys() { keysPresent = Set(KeyName.allCases.filter { Keychain.get($0) != nil }) }
+    /// Headless development runs never read the Keychain (a different build reading it can make macOS ask).
+    func refreshKeys() { keysPresent = Headless.active ? [] : Set(KeyName.allCases.filter { Keychain.get($0) != nil }) }
     func saveKey(_ k: KeyName, _ v: String) {
         Keychain.set(k, v); refreshKeys()
         for s in Source.discoverable where s.needsKey == k { discover[s] = DiscoverState(); load(s, reset: true) }
@@ -170,6 +171,24 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
         library[i].options = o.isDefault ? nil : o
         saveLibrary()
         engine.updateOptions(itemID: item.id, library[i].options)
+    }
+
+    /// Light measured from each wallpaper's poster, for Day & Night "Pick for me" (kept while Lucid runs).
+    @Published private(set) var light: [String: LightStats] = [:]
+
+    /// Suggested dawn, day, dusk and night wallpapers from the library, by the light in each poster.
+    func sunPicks() async -> SunPicks {
+        let items = library.filter(\.isLocalReady)
+        let todo: [(String, String)] = items.filter { light[$0.id] == nil }.compactMap { it in
+            (it.thumbPath ?? (it.kind == .image ? it.localPath : nil)).map { (it.id, $0) }
+        }
+        if !todo.isEmpty {
+            let measured = await Task.detached(priority: .userInitiated) {
+                todo.compactMap { id, path in PosterLight.stats(path: path).map { (id, $0) } }
+            }.value
+            for (id, l) in measured { light[id] = l }
+        }
+        return SunPicker.pick(items.compactMap { it in light[it.id].map { SunCandidate(id: it.id, title: it.title, light: $0) } })
     }
 
     func setDayNight(day: WallItem, night: WallItem, dawn: WallItem? = nil, dusk: WallItem? = nil, screenKey: String?) {
