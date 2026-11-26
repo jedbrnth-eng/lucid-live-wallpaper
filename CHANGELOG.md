@@ -4,10 +4,14 @@ All notable changes to Lucid. The format follows [Keep a Changelog](https://keep
 
 ## [Unreleased]
 
+### Added
+- **Pick for me in Day & Night.** Open Day/Night and the four slots are already filled from your library, chosen by the light in each wallpaper: the darkest for night, the brightest for day, an orange one for dusk and a soft pink or mauve one for dawn (words like "sunset" or "stars" in a title help). Dawn and dusk stay empty when nothing looks like them. The sheet now shows the four picks as a strip in the order the day plays them, with today's start time for each and a bar of their colours. Change any of them before you press Set; a saved Day/Night pair opens as it is.
+
 ### Changed
 - **One video, one decoder, on every display.** When the same video plays on several displays (the usual Apply sets it on all of them), Lucid now decodes it once and shows that one player on every display, so every display shows the same frame. Before, each display decoded its own copy. Measured with the new benchmark: a second display used to add 56–106% to Lucid's CPU use and 59–92% to its CPU energy; now it adds at most 22% (often nothing). When one display is covered by a full-screen app, the shared video keeps playing for the others and pauses once none shows it. Changing a wallpaper's speed now cross-fades into the new speed from the same moment.
 
 ### Developer
+- `-lucidShots <folder>` (with `LUCID_SUPPORT_DIR`) renders app screens to PNG with a generated demo library, also without anything on screen. Headless runs never read the Keychain.
 - `-lucidBench <video or folder>` (with `LUCID_SUPPORT_DIR`) measures what playback costs Lucid per video and per number of displays, and writes `bench.json`. It never starts the app's windows, menu-bar item or Dock icon and never puts anything on screen, so it is safe next to your everyday copy. It records the Mac's load average with every run, because other work skews the figures.
 
 ### Security
