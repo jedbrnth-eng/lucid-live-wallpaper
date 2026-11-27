@@ -23,6 +23,25 @@ func registerBenchTests() {
         let r = ProcessMeter.rates(from: a, to: back)
         expectEqual(r.cpuPercent, 0); expectEqual(r.energyMilliwatts, 0); expectEqual(r.wakeupsPerSecond, 0)
     }
+    test("Meter: an unreadable video's NaN times never reach the report (JSONSerialization would throw)") {
+        let row: [String: Any] = ["spread": ProcessMeter.spreadMilliseconds([.nan, 1.0, 1.25]), "length": ProcessMeter.seconds(.nan) ?? NSNull()]
+        expect(JSONSerialization.isValidJSONObject(row), "\(row)")
+        expectEqual(ProcessMeter.spreadMilliseconds([.nan, 1.0, 1.25]), 250)
+        expectEqual(ProcessMeter.spreadMilliseconds([.nan]), 0)
+        expectEqual(ProcessMeter.spreadMilliseconds([]), 0)
+        expectEqual(ProcessMeter.seconds(12.34), 12.3)
+        expect(ProcessMeter.seconds(.nan) == nil && ProcessMeter.seconds(.infinity) == nil, "unknown length: left out")
+    }
+    test("Meter: the written report never holds NaN or infinity, whatever produced them") {
+        let report: [String: Any] = ["results": [["playhead_spread_ms": Double.nan, "length_s": -Double.infinity, "displays": 2, "file": "x.mp4"]],
+                                     "rounds": 3, "load1": 4.5]
+        let safe = ProcessMeter.jsonSafe(report)
+        expect(JSONSerialization.isValidJSONObject(safe), "\(safe)")
+        let row = ((safe as? [String: Any])?["results"] as? [[String: Any]])?.first
+        expect(row?["playhead_spread_ms"] is NSNull && row?["length_s"] is NSNull, "\(String(describing: row))")
+        expectEqual(row?["displays"] as? Int, 2); expectEqual(row?["file"] as? String, "x.mp4")
+        expectEqual((safe as? [String: Any])?["load1"] as? Double, 4.5)
+    }
     test("Meter: median of rounds (odd, even, empty)") {
         expectEqual(ProcessMeter.median([3, 1, 2]), 2)
         expectEqual(ProcessMeter.median([4, 1, 3, 2]), 2.5)

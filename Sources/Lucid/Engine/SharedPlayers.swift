@@ -11,6 +11,9 @@ import AVFoundation
     static let shared = SharedPlayers()
     private var share = PlayerShare()
     private var loops: [PlayerShareKey: (player: AVQueuePlayer, looper: AVPlayerLooper)] = [:]
+    /// Seeks waiting for a new player's first item, by player.
+    private var pendingSeeks: [PlayerShareKey: (id: Int, observation: NSKeyValueObservation)] = [:]
+    private var seekCount = 0
 
     /// Players alive right now (status file and benchmark).
     var count: Int { loops.count }
@@ -32,6 +35,27 @@ import AVFoundation
         return p
     }
 
+    /// Moves this file's player at this speed to `time()` (a speed change cross-fades into the new player there).
+    /// AVPlayerLooper fills a new player's queue a moment after it is made, and a seek before that is dropped
+    /// (the video would start from 0), so this waits for the first item and reads `time()` only then.
+    func seek(path: String, speed: Double, to time: @escaping @MainActor () -> CMTime) {
+        let k = PlayerShareKey(path: path, speed: speed)
+        guard let p = loops[k]?.player else { return }
+        seekCount += 1
+        let id = seekCount
+        let observation = p.observe(\.currentItem, options: [.initial, .new]) { [weak self] p, _ in
+            guard p.currentItem != nil else { return }
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard let self, self.pendingSeeks[k]?.id == id else { return }
+                    self.pendingSeeks[k] = nil
+                    p.seek(to: time(), toleranceBefore: .zero, toleranceAfter: .zero)
+                }
+            }
+        }
+        pendingSeeks[k] = (id, observation)
+    }
+
     /// One window wants the video running or paused; the player runs while any of its windows wants it.
     func setRunning(_ run: Bool, path: String, speed: Double, holder: String) {
         let k = PlayerShareKey(path: path, speed: speed)
@@ -43,6 +67,7 @@ import AVFoundation
     func release(path: String, speed: Double, holder: String) {
         let k = PlayerShareKey(path: path, speed: speed)
         if share.release(k, holder: holder), let l = loops.removeValue(forKey: k) {
+            pendingSeeks[k] = nil
             l.player.pause()
             l.looper.disableLooping()
             l.player.removeAllItems()
