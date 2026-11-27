@@ -114,16 +114,16 @@ struct CPUGate {
     }
 }
 
-/// What macOS's power-source list says (IOPSCopyPowerSourcesInfo): on battery or not, and the battery charge.
-/// Running from the Mac's battery or from a UPS ("UPS Power", a desktop Mac in a power cut) is on battery.
-/// The Mac's own battery counts, wherever it is listed; another source (a UPS) only when there is no internal battery.
-/// Descriptions come in as plain dictionaries with IOKit's keys, so this stays testable.
 /// On battery or not, and the battery charge (nil = unknown).
 struct PowerReading: Equatable {
     var onBattery: Bool
     var percent: Int?
 }
 
+/// What macOS's power-source list says (IOPSCopyPowerSourcesInfo): on battery or not, and the battery charge.
+/// Running from the Mac's battery or from a UPS ("UPS Power", a desktop Mac in a power cut) is on battery.
+/// The Mac's own battery counts, wherever it is listed; another source (a UPS) only when there is no internal battery.
+/// Descriptions come in as plain dictionaries with IOKit's keys, so this stays testable.
 enum PowerSources {
     static func reading(providing: String?, sources: [[String: Any]]) -> PowerReading {
         func percent(_ d: [String: Any]) -> Int? {
