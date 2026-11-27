@@ -205,11 +205,12 @@ struct DayNightSchedule {
         let start = cal.startOfDay(for: d)
         guard let end = cal.date(byAdding: .day, value: 1, to: start) else { return [:] }
         var out: [DayPart: Date] = [:]
-        var t = start, prev = part(at: start)
+        // From just before midnight, so a part that starts at 00:00 (a manual time) gets its start too.
+        var t = start.addingTimeInterval(-1), prev = part(at: t)
         for _ in 0..<16 {
             guard let b = nextBoundary(after: t), b < end else { break }
             let p = part(at: b)
-            if p != prev, out[p] == nil { out[p] = b }
+            if b >= start, p != prev, out[p] == nil { out[p] = b }
             prev = p; t = b
         }
         return out

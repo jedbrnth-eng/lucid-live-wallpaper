@@ -4,6 +4,8 @@
 
 // "Pick for me" in Day & Night: the light in each wallpaper decides where it goes.
 import Foundation
+import CoreGraphics
+import ImageIO
 
 func registerSunPickerTests() {
     func c(_ id: String, _ title: String, luma: Double, warmth: Double, sat: Double = 0.3) -> SunCandidate {
@@ -86,6 +88,55 @@ func registerSunPickerTests() {
         }
         expect(a < b && b < c && c < d, "dawn < day < dusk < night: \(starts)")
         expect(b.timeIntervalSince(a) > 15 * 60 && b.timeIntervalSince(a) < 90 * 60, "dawn lasts tens of minutes")
+    }
+    test("Sun picks: a part that starts at midnight keeps its start time (fixed times from 00:00)") {
+        let utc = TimeZone(identifier: "UTC")!
+        let midnight = 1_795_000_000 - 1_795_000_000 % 86_400   // a UTC midnight
+        let day0 = Date(timeIntervalSince1970: TimeInterval(midnight)), noon = day0.addingTimeInterval(12 * 3600)
+        func hours(_ dayStart: Int, _ nightStart: Int) -> [DayPart: Double] {
+            DayNightSchedule(mode: .manual(dayStartMinute: dayStart, nightStartMinute: nightStart), timeZone: utc)
+                .partStarts(onLocalDayOf: noon).mapValues { $0.timeIntervalSince(day0) / 3600 }
+        }
+        let dawnFirst = hours(0, 19 * 60)
+        expectEqual(dawnFirst[.dawn], 0, "dawn from 00:00: \(dawnFirst)")
+        expectEqual(dawnFirst[.day], 1); expectEqual(dawnFirst[.dusk], 18); expectEqual(dawnFirst[.night], 19)
+        let nightFirst = hours(7 * 60, 0)
+        expectEqual(nightFirst[.night], 0, "night from 00:00: \(nightFirst)")
+        expectEqual(nightFirst[.dawn], 7); expectEqual(nightFirst[.day], 8); expectEqual(nightFirst[.dusk], 23)
+    }
+    test("Sun strip: an empty slot shows its own part (no sunset on an empty day or night)") {
+        expectEqual(DayPart.allCases.map(\.symbol), ["sunrise", "sun.max", "sunset", "moon.stars"])
+    }
+    // PosterLight reads the posters for Pick for me (ImageIO, a 24-pixel-wide copy).
+    func poster(_ name: String, _ rgb: (CGFloat, CGFloat, CGFloat), width: Int = 64, height: Int = 36) -> String? {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("lucid-test-\(getpid())-\(name).png")
+        guard let space = CGColorSpace(name: CGColorSpace.sRGB),
+              let ctx = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0, space: space,
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+        ctx.setFillColor(CGColor(colorSpace: space, components: [rgb.0, rgb.1, rgb.2, 1])!)
+        ctx.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        guard let img = ctx.makeImage(), let dest = CGImageDestinationCreateWithURL(url as CFURL, "public.png" as CFString, 1, nil) else { return nil }
+        CGImageDestinationAddImage(dest, img, nil)
+        return CGImageDestinationFinalize(dest) ? url.path : nil
+    }
+    test("Poster light: a poster's average colour, light and warmth are read from the file") {
+        guard let o = poster("orange", (1, 0.5, 0)), let n = poster("navy", (0.05, 0.05, 0.3), width: 40, height: 90) else {
+            expect(false, "could not write the test posters"); return
+        }
+        defer { [o, n].forEach { try? FileManager.default.removeItem(atPath: $0) } }
+        guard let a = PosterLight.stats(path: o), let b = PosterLight.stats(path: n) else { expect(false, "unread"); return }
+        expectEqual(a.rgb.count, 3)
+        for (got, want) in zip(a.rgb, [1.0, 0.5, 0.0]) { expectNear(got, want, 0.02, "orange rgb \(a.rgb)") }
+        expectNear(a.luma, 0.2126 + 0.7152 * 0.5, 0.02)
+        expect(a.warmth > 0.9 && b.warmth < -0.2, "orange is warm, navy is cool: \(a.warmth), \(b.warmth)")
+        expect(b.luma < 0.1 && b.luma < a.luma, "a portrait navy poster reads dark: \(b.luma)")
+    }
+    test("Poster light: a missing or damaged picture reads as nothing (never a crash)") {
+        expectEqual(PosterLight.stats(path: "/nonexistent/lucid-poster.png"), nil)
+        let bad = FileManager.default.temporaryDirectory.appendingPathComponent("lucid-test-\(getpid())-bad.jpg")
+        try? Data("not a picture".utf8).write(to: bad)
+        defer { try? FileManager.default.removeItem(at: bad) }
+        expectEqual(PosterLight.stats(path: bad.path), nil)
     }
     // The library side of Pick for me: the Store calls these with the library as it is at that moment.
     func wall(_ id: String, _ kind: Kind = .video) -> WallItem {

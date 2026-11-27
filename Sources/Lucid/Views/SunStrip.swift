@@ -49,7 +49,7 @@ struct SunStrip: View {
                 } else {
                     RoundedRectangle(cornerRadius: Theme.radiusSmall)
                         .strokeBorder(Theme.line, style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
-                    Image(systemName: s.part == .dawn ? "sunrise" : "sunset").foregroundStyle(Theme.faint)
+                    Image(systemName: s.part.symbol).foregroundStyle(Theme.faint)
                 }
             }
             .aspectRatio(16 / 9, contentMode: .fit)

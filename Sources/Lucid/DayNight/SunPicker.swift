@@ -117,6 +117,13 @@ enum SunPicker {
     }
 }
 
+extension DayPart {
+    /// The SF Symbol an empty Day & Night slot shows.
+    var symbol: String {
+        switch self { case .dawn: return "sunrise"; case .day: return "sun.max"; case .dusk: return "sunset"; case .night: return "moon.stars" }
+    }
+}
+
 extension SunPicker {
     /// The picture on this Mac that shows a wallpaper: its poster, or for a photo the photo itself when the poster
     /// is missing. Never a web address, so the Day & Night sheet and its light readings work offline.
