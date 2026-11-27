@@ -52,6 +52,25 @@ enum ProcessMeter {
                             wakeupsPerSecond: round2(perSecond(a.wakeups, b.wakeups)))
     }
 
+    /// How far apart the playheads are, in ms. A player that can't read its video reports NaN: left out.
+    static func spreadMilliseconds(_ times: [Double]) -> Double {
+        let t = times.filter(\.isFinite)
+        guard let hi = t.max(), let lo = t.min() else { return 0 }
+        return ((hi - lo) * 1000).rounded()
+    }
+    /// A length in seconds, rounded to 0.1 s, for the report; nil when unknown (NaN or infinite).
+    static func seconds(_ s: Double) -> Double? { s.isFinite ? (s * 10).rounded() / 10 : nil }
+    /// The report with every NaN or infinite number replaced by null. JSONSerialization raises an Objective-C
+    /// exception on either, which Swift can't catch, so one bad value would crash the benchmark.
+    static func jsonSafe(_ v: Any) -> Any {
+        switch v {
+        case let d as Double: return d.isFinite ? d : NSNull()
+        case let a as [Any]: return a.map(jsonSafe)
+        case let o as [String: Any]: return o.mapValues(jsonSafe)
+        default: return v
+        }
+    }
+
     static func median(_ xs: [Double]) -> Double {
         guard !xs.isEmpty else { return 0 }
         let s = xs.sorted(), m = s.count / 2

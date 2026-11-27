@@ -22,6 +22,7 @@ registerDownloadTests()
 registerFinalFixTests()
 registerBenchTests()
 registerPlayerShareTests()
+registerSharedPlayerTests()
 setvbuf(stdout, nil, _IOLBF, 0)
 let args = CommandLine.arguments.dropFirst().first
 exit(runAllTests(filter: args))

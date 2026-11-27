@@ -258,8 +258,12 @@ import ImageIO
             let old = surfaces[k]
             let n = ScreenSurface(screen: s, key: k, assignment: a)
             // Same video at a new speed: start the new player where the old one is, so the cross-fade is seamless.
-            if let o = old, o.assignment.sameMedia(a), let t = o.player?.currentTime(), let np = n.player, np.rate == 0 {
-                np.seek(to: t, toleranceBefore: .zero, toleranceAfter: .zero)
+            if let o = old, o.assignment.sameMedia(a), let op = o.player, let np = n.player, np.rate == 0 {
+                let now = op.currentTime()
+                SharedPlayers.shared.seek(path: n.assignment.path, speed: n.playSpeed) { [weak op] in
+                    guard let t = op?.currentTime(), t.isNumeric else { return now }
+                    return t
+                }
             }
             surfaces[k] = n
             n.occlusionObserver = NotificationCenter.default.addObserver(forName: NSWindow.didChangeOcclusionStateNotification, object: n.window, queue: .main) { [weak self, weak n] _ in
@@ -310,11 +314,12 @@ import ImageIO
         var displays: [DisplayPlayback] = []
         for s in surfaces.values {
             let covered = Pref.pauseWhenCovered && !s.visible
-            let run = kind == nil && !covered
+            let run = RunDecision.shouldRun(global: kind, covered: covered, fadingOut: false, wasRunning: s.wantsRun)
             s.setRunning(run)
             displays.append(covered ? .covered : .playing)
             if run && (s.assignment.reactive?.any ?? false) { needAudio = true }
         }
+        for s in fading { s.setRunning(RunDecision.shouldRun(global: kind, covered: false, fadingOut: true, wasRunning: s.wantsRun)) }
         statusText = PlaybackStatus.text(global: kind, displays: displays)
         if kind == nil, displays.isEmpty, !currentAssignments.isEmpty { statusText = "Showing a still image" }
         if needAudio != audioNeeded {

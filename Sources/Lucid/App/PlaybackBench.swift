@@ -50,7 +50,7 @@ import AVFoundation
                         "players": Set(surfaces.compactMap { $0.player.map(ObjectIdentifier.init) }).count,
                         "layers_ready": surfaces.filter { ($0.host?.contentLayer as? AVPlayerLayer)?.isReadyForDisplay == true }.count,
                         "surfaces_running": surfaces.filter(\.isRunning).count,
-                        "playhead_spread_ms": times.isEmpty ? 0 : ((times.max()! - times.min()!) * 1000).rounded(),
+                        "playhead_spread_ms": ProcessMeter.spreadMilliseconds(times),
                     ]
                     surfaces.forEach { $0.close() }
                     await wait(1.5)
@@ -94,7 +94,7 @@ import AVFoundation
                 d["codec"] = String(bytes: [24, 16, 8, 0].map { UInt8((c >> $0) & 0xFF) }, encoding: .ascii) ?? "?"
             }
         }
-        if let dur = try? await asset.load(.duration) { d["length_s"] = (dur.seconds * 10).rounded() / 10 }
+        if let dur = try? await asset.load(.duration), let s = ProcessMeter.seconds(dur.seconds) { d["length_s"] = s }
         return d
     }
 
