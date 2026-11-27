@@ -113,8 +113,7 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
         if !stray.isEmpty { stray.forEach { adoptInFlight.insert($0.path) }; importFiles(stray, move: true, quiet: false) }
     }
 
-    /// Headless development runs never read the Keychain (a different build reading it can make macOS ask).
-    func refreshKeys() { keysPresent = Headless.active ? [] : Set(KeyName.allCases.filter { Keychain.get($0) != nil }) }
+    func refreshKeys() { keysPresent = Set(KeyName.allCases.filter { Keychain.get($0) != nil }) }
     func saveKey(_ k: KeyName, _ v: String) {
         Keychain.set(k, v); refreshKeys()
         for s in Source.discoverable where s.needsKey == k { discover[s] = DiscoverState(); load(s, reset: true) }

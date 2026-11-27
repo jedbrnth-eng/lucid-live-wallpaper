@@ -32,6 +32,9 @@ enum DevMode {
     /// Like the check, these headless runs need LUCID_SUPPORT_DIR (a throwaway folder).
     static let bench = benchRequested && ProcessInfo.processInfo.environment["LUCID_SUPPORT_DIR"] != nil
     static let shots = shotsRequested && ProcessInfo.processInfo.environment["LUCID_SUPPORT_DIR"] != nil
+    /// This launch is a headless development run (the check, the benchmark or the screenshots; App/Headless.swift):
+    /// the SwiftUI app never starts, nothing is put on screen and the Keychain is never read.
+    static let headless = checkRequested || benchRequested || shotsRequested
     static let checkSuite = "com.jedbrn.lucid.devcheck"
     /// Settings storage: during the check or the benchmark, a separate suite that starts empty every run, so they
     /// never read or change your real preferences (shortcuts, update check, location, speed).
@@ -98,9 +101,12 @@ enum Pref {
 
 // MARK: - Keychain (API keys typed by the user into Settings)
 
+/// Never used in a headless development run: a different build of Lucid reading the login Keychain can make macOS
+/// ask for access, and nobody may be there to answer.
 enum Keychain {
     static let service = "com.jedbrn.lucid"
     static func get(_ k: KeyName) -> String? {
+        guard !DevMode.headless else { return nil }
         let q: [CFString: Any] = [kSecClass: kSecClassGenericPassword, kSecAttrService: service,
                                   kSecAttrAccount: k.rawValue, kSecReturnData: true, kSecMatchLimit: kSecMatchLimitOne]
         var out: CFTypeRef?
@@ -109,6 +115,7 @@ enum Keychain {
         return (s?.isEmpty ?? true) ? nil : s
     }
     static func set(_ k: KeyName, _ v: String) {
+        guard !DevMode.headless else { return }
         let base: [CFString: Any] = [kSecClass: kSecClassGenericPassword, kSecAttrService: service, kSecAttrAccount: k.rawValue]
         SecItemDelete(base as CFDictionary)
         let t = v.trimmingCharacters(in: .whitespacesAndNewlines)
