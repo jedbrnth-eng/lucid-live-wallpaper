@@ -87,6 +87,47 @@ func registerSunPickerTests() {
         expect(a < b && b < c && c < d, "dawn < day < dusk < night: \(starts)")
         expect(b.timeIntervalSince(a) > 15 * 60 && b.timeIntervalSince(a) < 90 * 60, "dawn lasts tens of minutes")
     }
+    // The library side of Pick for me: the Store calls these with the library as it is at that moment.
+    func wall(_ id: String, _ kind: Kind = .video) -> WallItem {
+        var it = WallItem(id: id, source: .local, kind: kind, title: id, width: 3840, height: 2160)
+        it.thumbPath = "/lib/Thumbs/\(id).jpg"; it.localPath = "/lib/Media/\(id)." + (kind == .image ? "jpg" : "mov")
+        return it
+    }
+    let dark = LightStats(luma: 0.05, warmth: -0.05, saturation: 0.3), darker = LightStats(luma: 0.02, warmth: -0.05, saturation: 0.3)
+    let bright = LightStats(luma: 0.7, warmth: -0.05, saturation: 0.3)
+    test("Sun picks: a wallpaper removed while the posters are read is never picked or kept") {
+        let a = wall("a"), b = wall("b"), gone = wall("gone")
+        var book = LightBook()
+        expectEqual(book.todo([a, b, gone], exists: { _ in true }).map { $0.id }, ["a", "b", "gone"])
+        // The posters are being read; meanwhile "gone" is removed, so the library is now [a, b].
+        book.record([("a", bright), ("b", dark), ("gone", darker)], ready: [a, b])
+        expect(book["gone"] == nil, "no light kept for a removed wallpaper")
+        let p = book.picks([a, b])
+        expectEqual(p.night, "b"); expectEqual(p.day, "a")
+    }
+    test("Sun picks: a wallpaper removed or imported again is measured afresh") {
+        let a = wall("a")
+        var book = LightBook()
+        book.record([("a", dark)], ready: [a])
+        expect(book.todo([a], exists: { _ in true }).isEmpty, "measured once")
+        book.forget("a")
+        expectEqual(book.todo([a], exists: { _ in true }).map { $0.id }, ["a"], "measured again")
+    }
+    test("Sun picks: posters come from this Mac only; a photo whose poster is missing is read itself") {
+        let photo = wall("p", .image), video = wall("v")
+        let onDisk: Set<String> = [photo.localPath!, video.localPath!]   // both posters (thumbnails) are gone
+        expectEqual(SunPicker.posterPath(photo, exists: onDisk.contains), photo.localPath)
+        expectEqual(SunPicker.posterPath(video, exists: onDisk.contains), nil, "no poster on this Mac: nothing, never the web")
+        expectEqual(SunPicker.posterPath(video, exists: { _ in true }), video.thumbPath)
+        expectEqual(LightBook().todo([photo, video], exists: onDisk.contains).map { $0.path }, [photo.localPath!])
+    }
+    test("Sun picks: a suggestion made as the sheet opens never replaces a choice made meanwhile") {
+        let s = SunPicks(dawn: "a", day: "b", dusk: "c", night: "d")
+        expect(SunPicker.shouldApply(s, shown: SunPicks(), asked: false), "the sheet opened empty: fill it")
+        expect(!SunPicker.shouldApply(s, shown: SunPicks(day: "mine"), asked: false), "you chose a day wallpaper while the posters were read")
+        expect(SunPicker.shouldApply(s, shown: SunPicks(day: "mine"), asked: true), "Pick for me pressed: replace")
+        expect(!SunPicker.shouldApply(SunPicks(day: "b"), shown: SunPicks(), asked: true), "no night pick: nothing to apply")
+    }
     test("Sun picks: fewer than two wallpapers picks nothing") {
         expectEqual(SunPicker.pick([]), SunPicks())
         expectEqual(SunPicker.pick([noon]), SunPicks())

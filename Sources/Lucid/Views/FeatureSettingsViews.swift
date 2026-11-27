@@ -112,10 +112,17 @@ struct DayNightSheet: View {
         it.title + (it.kind == .image ? " · photo" : "")
     }
 
+    private var shown: SunPicks {
+        func id(_ s: String) -> String? { s.isEmpty ? nil : s }
+        return SunPicks(dawn: id(dawnID), day: id(dayID), dusk: id(duskID), night: id(nightID))
+    }
+
     /// Fills the four slots from the library: darkest for night, brightest for day, warm ones for dawn and dusk.
-    private func pickForMe() async {
+    /// `asked`: you pressed Pick for me. Otherwise (the sheet opened empty) a choice you make while the posters are
+    /// being read is kept.
+    private func pickForMe(asked: Bool) async {
         let p = await store.sunPicks()
-        guard let d = p.day, let n = p.night else { return }
+        guard SunPicker.shouldApply(p, shown: shown, asked: asked), let d = p.day, let n = p.night else { return }
         dayID = d; nightID = n; dawnID = p.dawn ?? ""; duskID = p.dusk ?? ""
         suggested = true
     }
@@ -125,7 +132,8 @@ struct DayNightSheet: View {
         return [(DayPart.dawn, dawnID), (.day, dayID), (.dusk, duskID), (.night, nightID)].map { part, id in
             let it = choices.first { $0.id == id }
             let tint = it.flatMap { store.light[$0.id]?.rgb }.flatMap { $0.count == 3 ? Color(red: $0[0], green: $0[1], blue: $0[2]) : nil }
-            return SunStrip.Slot(part: part, title: it?.title, thumbURL: it?.thumbURL, thumbPath: it?.thumbPath,
+            return SunStrip.Slot(part: part, title: it?.title,
+                                 posterPath: it.flatMap { SunPicker.posterPath($0, exists: FileManager.default.fileExists(atPath:)) },
                                  starts: starts[part], tint: tint, isNow: dayNight.part == part)
         }
     }
@@ -135,7 +143,7 @@ struct DayNightSheet: View {
             HStack(alignment: .top) {
                 Header(title: "Day/Night · \(target.name)", subtitle: "One wallpaper from sunrise to sunset, another at night, with a short cross-fade.")
                 Spacer(minLength: 12)
-                Button { Task { await pickForMe() } } label: { Label("Pick for me", systemImage: "sun.horizon") }
+                Button { Task { await pickForMe(asked: true) } } label: { Label("Pick for me", systemImage: "sun.horizon") }
                     .buttonStyle(.pill).disabled(choices.count < 2)
                     .help("Choose by the light in each wallpaper: darkest for night, brightest for day, warm ones for dawn and dusk")
             }
@@ -185,7 +193,7 @@ struct DayNightSheet: View {
             if let r = engine.state.dayNight?[scope] {
                 dayID = r.day.itemID; nightID = r.night.itemID; dawnID = r.dawn?.itemID ?? ""; duskID = r.dusk?.itemID ?? ""
             } else {
-                Task { await pickForMe() }   // nothing set yet: start from a suggestion
+                Task { await pickForMe(asked: false) }   // nothing set yet: start from a suggestion
             }
         }
     }

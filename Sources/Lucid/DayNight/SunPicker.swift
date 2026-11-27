@@ -116,3 +116,43 @@ enum SunPicker {
         return best?.picks ?? SunPicks()
     }
 }
+
+extension SunPicker {
+    /// The picture on this Mac that shows a wallpaper: its poster, or for a photo the photo itself when the poster
+    /// is missing. Never a web address, so the Day & Night sheet and its light readings work offline.
+    static func posterPath(_ it: WallItem, exists: (String) -> Bool) -> String? {
+        if let t = it.thumbPath, exists(t) { return t }
+        if it.kind == .image, let p = it.localPath, exists(p) { return p }
+        return nil
+    }
+    /// Whether a suggestion replaces what the sheet shows: always when you press Pick for me (`asked`), but a
+    /// suggestion the sheet made by itself on opening only while you haven't chosen anything in the meantime.
+    static func shouldApply(_ suggestion: SunPicks, shown: SunPicks, asked: Bool) -> Bool {
+        guard suggestion.day != nil, suggestion.night != nil else { return false }
+        return asked || shown == SunPicks()
+    }
+}
+
+/// Light measured from each wallpaper's poster for "Pick for me", kept while Lucid runs. It only holds wallpapers
+/// that are in the library: readings for one removed while the posters were read are dropped, and a wallpaper
+/// removed or imported again is measured afresh. The Store passes the ready library as it is at each call.
+struct LightBook: Equatable {
+    private(set) var stats: [String: LightStats] = [:]
+    subscript(_ id: String) -> LightStats? { stats[id] }
+
+    /// The ready wallpapers not measured yet, each with the picture on this Mac to read.
+    func todo(_ ready: [WallItem], exists: (String) -> Bool) -> [(id: String, path: String)] {
+        ready.filter { stats[$0.id] == nil }.compactMap { it in SunPicker.posterPath(it, exists: exists).map { (it.id, $0) } }
+    }
+    /// Keeps the readings of wallpapers still in `ready` (the library after the posters were read).
+    mutating func record(_ measured: [(String, LightStats)], ready: [WallItem]) {
+        let ids = Set(ready.map(\.id))
+        for (id, l) in measured where ids.contains(id) { stats[id] = l }
+    }
+    /// A wallpaper was removed, or imported again (its poster may differ).
+    mutating func forget(_ id: String) { stats[id] = nil }
+    /// The picks among `ready` (the library now), from the readings so far.
+    func picks(_ ready: [WallItem]) -> SunPicks {
+        SunPicker.pick(ready.compactMap { it in stats[it.id].map { SunCandidate(id: it.id, title: it.title, light: $0) } })
+    }
+}

@@ -127,6 +127,7 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
         library.removeAll { $0.id == item.id }
         library.insert(item, at: 0)
         saveLibrary()
+        light.forget(item.id)   // imported again: its poster may be new
     }
     func remove(_ item: WallItem) {
         guard let it = libraryItem(item.id) else { return }
@@ -138,6 +139,7 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
         if let t = it.thumbPath, ImportPolicy.isSafeToDelete(t, inside: Paths.thumbs) { try? FileManager.default.removeItem(atPath: t) }
         library.removeAll { $0.id == item.id }
         saveLibrary()
+        light.forget(item.id)
         usage.forget(item.id); saveUsage()
         PreviewRenditions.forget(id: item.id)
         flash("Removed “\(it.title)”")
@@ -174,21 +176,19 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
     }
 
     /// Light measured from each wallpaper's poster, for Day & Night "Pick for me" (kept while Lucid runs).
-    @Published private(set) var light: [String: LightStats] = [:]
+    @Published private(set) var light = LightBook()
 
-    /// Suggested dawn, day, dusk and night wallpapers from the library, by the light in each poster.
+    /// Suggested dawn, day, dusk and night wallpapers from the library, by the light in each poster. The posters are
+    /// read off the main thread; the library is read again afterwards, so a wallpaper removed meanwhile is never picked.
     func sunPicks() async -> SunPicks {
-        let items = library.filter(\.isLocalReady)
-        let todo: [(String, String)] = items.filter { light[$0.id] == nil }.compactMap { it in
-            (it.thumbPath ?? (it.kind == .image ? it.localPath : nil)).map { (it.id, $0) }
-        }
+        let todo = light.todo(library.filter(\.isLocalReady), exists: FileManager.default.fileExists(atPath:))
         if !todo.isEmpty {
             let measured = await Task.detached(priority: .userInitiated) {
-                todo.compactMap { id, path in PosterLight.stats(path: path).map { (id, $0) } }
+                todo.compactMap { t in PosterLight.stats(path: t.path).map { (t.id, $0) } }
             }.value
-            for (id, l) in measured { light[id] = l }
+            light.record(measured, ready: library.filter(\.isLocalReady))
         }
-        return SunPicker.pick(items.compactMap { it in light[it.id].map { SunCandidate(id: it.id, title: it.title, light: $0) } })
+        return light.picks(library.filter(\.isLocalReady))
     }
 
     func setDayNight(day: WallItem, night: WallItem, dawn: WallItem? = nil, dusk: WallItem? = nil, screenKey: String?) {
