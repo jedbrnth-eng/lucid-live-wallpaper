@@ -21,14 +21,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
     func applicationDidFinishLaunching(_ n: Notification) {
         MainActor.assumeIsolated {
-            if DevMode.checkRequested && !DevMode.check {
-                FileHandle.standardError.write(Data("lucidCheck needs LUCID_SUPPORT_DIR (a throwaway folder); refusing to run it on your library.\n".utf8))
-                exit(2)
-            }
-            if DevMode.check { LucidEngine.setsDesktopPicture = false }
             let store = Store.shared
             store.engine.refresh()
-            if DevMode.check { Task { @MainActor in await DevCheck.run(store) }; return }
             store.startDownloadsWatcher()
             HotkeyCenter.shared.handler = { action in
                 switch action {
@@ -112,7 +106,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ s: NSApplication) -> Bool { false }
 }
 
+/// Entry point. A headless development run (Headless.swift) never starts the SwiftUI app, so no main window,
+/// menu-bar item or Dock icon appears; everything else starts the app as usual.
 @main
+enum LucidMain {
+    static func main() {
+        MainActor.assumeIsolated {
+            if DevMode.checkRequested { Headless.runCheck() }
+            else if DevMode.benchRequested { Headless.runBench() }
+            else if DevMode.shotsRequested { Headless.runShots() }
+            else { LucidApp.main() }
+        }
+    }
+}
+
 struct LucidApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var delegate
     @StateObject private var store = Store.shared

@@ -69,6 +69,16 @@ enum PausePolicy {
 
 enum DisplayPlayback: Equatable { case playing, covered }
 
+/// Whether one wallpaper window's video should run. A window on screen runs unless a global pause or its cover
+/// stops it. A window cross-fading out (1.2 s) is still on screen, so it keeps what it had, but it never starts
+/// again and it stops with a global pause: it may share its player with a display that has just paused.
+enum RunDecision {
+    static func shouldRun(global: PauseReason?, covered: Bool, fadingOut: Bool, wasRunning: Bool) -> Bool {
+        if fadingOut { return wasRunning && global == nil }
+        return global == nil && !covered
+    }
+}
+
 enum PlaybackStatus {
     /// "Playing", "Paused: Low Power Mode", "Playing (1 of 2 displays paused: full-screen app)".
     static func text(global: PauseReason?, displays: [DisplayPlayback]) -> String {
@@ -114,9 +124,36 @@ struct CPUGate {
     }
 }
 
+/// On battery or not, and the battery charge (nil = unknown).
+struct PowerReading: Equatable {
+    var onBattery: Bool
+    var percent: Int?
+}
+
+/// What macOS's power-source list says (IOPSCopyPowerSourcesInfo): on battery or not, and the battery charge.
+/// Running from the Mac's battery or from a UPS ("UPS Power", a desktop Mac in a power cut) is on battery.
+/// The Mac's own battery counts, wherever it is listed; another source (a UPS) only when there is no internal battery.
+/// Descriptions come in as plain dictionaries with IOKit's keys, so this stays testable.
+enum PowerSources {
+    static func reading(providing: String?, sources: [[String: Any]]) -> PowerReading {
+        func percent(_ d: [String: Any]) -> Int? {
+            guard let cur = d["Current Capacity"] as? Int, let mx = d["Max Capacity"] as? Int, mx > 0 else { return nil }
+            return Int((Double(cur) / Double(mx) * 100).rounded())
+        }
+        let own = sources.first { ($0["Type"] as? String) == "InternalBattery" && percent($0) != nil }
+        return PowerReading(onBattery: providing == "Battery Power" || providing == "UPS Power",
+                            percent: (own ?? sources.first { percent($0) != nil }).flatMap(percent))
+    }
+}
+
 /// After a long pause, players and their decoded frames are released (the still desktop picture shows meanwhile)
 /// and rebuilt on resume.
 enum IdleRelease {
+    /// When the release is due: `afterMinutes` after a global pause began; nil when not paused or set to never.
+    static func deadline(pausedSince: Date?, afterMinutes: Int) -> Date? {
+        guard let t = pausedSince, afterMinutes > 0 else { return nil }
+        return t.addingTimeInterval(Double(afterMinutes) * 60)
+    }
     static func shouldRelease(pausedSince: Date?, now: Date, afterMinutes: Int) -> Bool {
         guard let t = pausedSince, afterMinutes > 0 else { return false }
         let e = now.timeIntervalSince(t)

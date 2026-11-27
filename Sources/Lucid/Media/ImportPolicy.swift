@@ -128,3 +128,16 @@ enum FillLayout {
         return FrameRect(x: (bounds.w - w) * fx, y: (bounds.h - h) * (1 - fy), w: w, h: h)
     }
 }
+
+extension ImportPolicy {
+    /// A file in the Lucid folder modified less than this long ago may still be being written: it waits.
+    static let settleSeconds: TimeInterval = 15
+    static func isSettled(modified: Date, now: Date) -> Bool { now.timeIntervalSince(modified) >= settleSeconds }
+    /// When to look again at files skipped as still being written (their modification dates): just after the first
+    /// one can have settled, and at most `settleSeconds` from now. Nil when nothing waits. A file growing inside a
+    /// watched folder sends no folder event, so this one look replaces the old scan every 5 s.
+    static func recheckDelay(modified: [Date], now: Date) -> TimeInterval? {
+        guard let first = modified.min() else { return nil }
+        return min(max(settleSeconds - now.timeIntervalSince(first), 0), settleSeconds) + 0.5
+    }
+}
