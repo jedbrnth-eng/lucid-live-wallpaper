@@ -176,6 +176,8 @@ Turn on **Settings → Audio reactive**, then pick looks per display in **Displa
 
 In **Displays**, click **Day/Night…** for one display, or **Day/Night for All…**, and pick a day and a night wallpaper. Lucid switches at sunrise and sunset with a short cross-fade.
 
+- **Pick for me.** The first time you open Day/Night, Lucid has already chosen from your library by the light in each wallpaper: the darkest for night, the brightest for day, an orange one for dusk and a soft pink one for dawn. A strip shows the four in the order the day plays them, with today's times. Change any of them, or press **Pick for me** again.
+
 - **Automatic** times come from your time zone's city (for example Bangkok), with no permission needed. Turn on **Use my location** in Settings for more accurate times. The location stays on your Mac.
 - Or choose **Fixed times** (for example day from 07:00, night from 19:00).
 - Lucid checks again after sleep, a time zone change or a clock change, and remembers your pairs after a restart. Near the poles, midnight sun and polar night are handled.
@@ -278,7 +280,11 @@ Playback benchmark (needs a build; never opens a window or touches your desktop,
 LUCID_SUPPORT_DIR=/tmp/lucid-bench build/Lucid.app/Contents/MacOS/Lucid -lucidBench ~/Movies/clip.mp4 -benchDisplays 1,2 -benchSeconds 12 -benchRounds 3
 ```
 
-It plays the clip (or every video in a folder) the way the desktop does, on 1 and 2 simulated displays, and writes `bench.json` with Lucid's CPU %, CPU energy, memory and wakeups, plus the Mac's load average for each run. It measures Lucid only, not the window server or the display. Compare builds at similar load, or by ratios within one run.
+Screenshots of app screens, also headless, with a generated demo library (no real wallpapers): `LUCID_SUPPORT_DIR=/tmp/lucid-shots build/Lucid.app/Contents/MacOS/Lucid -lucidShots /tmp/lucid-shots/out`.
+
+End-to-end check, also headless: `LUCID_SUPPORT_DIR=/tmp/lucid-check build/Lucid.app/Contents/MacOS/Lucid -lucidCheck YES` writes `check.json` and quits. `./headless-check.sh` runs it and fails if it shows any window, changes a desktop picture or calls the Keychain (CI runs it after every build).
+
+The benchmark plays the clip (or every video in a folder) the way the desktop does, on 1 and 2 simulated displays, and writes `bench.json` with Lucid's CPU %, CPU energy, memory and wakeups, plus the Mac's load average for each run. It measures Lucid only, not the window server or the display. Compare builds at similar load, or by ratios within one run.
 
 `selftest.sh` writes `selftest.json` in `~/Library/Application Support/Lucid/`. Inspect its JSON results: the wrapper's exit code alone does not prove every source passed. It uses the normal Lucid app environment, so don't run it alongside your everyday copy as if it were an isolated unit test. The catalog-builder command rewrites `catalog.json`; review the diff before committing it.
 

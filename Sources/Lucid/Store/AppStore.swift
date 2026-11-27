@@ -50,7 +50,10 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
     /// Playing playlists, one per scope (display key, or "*" for all displays). Saved in playback.json.
     @Published private(set) var runs: [String: PlaylistRun] = [:]
     var downloadsTimer: Timer?
-    var folderTimer: Timer?
+    /// Media/ and the Lucid folder are watched (pushed by the file system), not scanned every few seconds.
+    private var folderWatch: DirectoryWatcher?
+    /// One look later at files that were still being written.
+    private var strayRecheck: Timer?
     var adoptInFlight: Set<String> = []
     private var importsInFlight: Set<String> = []
     var watchSince: Date?
@@ -87,8 +90,8 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
         for s in Source.discoverable { discover[s] = DiscoverState() }
         scheduleRotation()
         adoptStrayFiles()
-        // Keep watching: files dropped into the Lucid folder while the app is open appear within seconds.
-        folderTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
+        // Keep watching: files dropped into the Lucid folder while the app is open appear at once.
+        folderWatch = DirectoryWatcher([Paths.media, Paths.support]) { [weak self] in
             MainActor.assumeIsolated { self?.adoptStrayFiles() }
         }
     }
@@ -98,7 +101,7 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
     func adoptStrayFiles() {
         let fm = FileManager.default
         let known = Set(library.compactMap(\.localPath))
-        var stray: [URL] = []
+        var stray: [URL] = [], settling: [Date] = []
         for dir in [Paths.media, Paths.support] {
             let e = fm.enumerator(at: dir, includingPropertiesForKeys: [.isRegularFileKey, .contentModificationDateKey],
                                   options: [.skipsHiddenFiles, .skipsSubdirectoryDescendants])
@@ -106,9 +109,14 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
                 if known.contains(f.path) || adoptInFlight.contains(f.path) || f.lastPathComponent.contains(".loop.") { continue }
                 if Media.kind(of: f) == nil { continue }
                 if let m = try? f.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate,
-                   Date().timeIntervalSince(m) < 15 { continue }   // still being written
+                   !ImportPolicy.isSettled(modified: m, now: Date()) { settling.append(m); continue }   // still being written
                 stray.append(f)
             }
+        }
+        strayRecheck?.invalidate(); strayRecheck = nil
+        if let wait = ImportPolicy.recheckDelay(modified: settling, now: Date()) {
+            strayRecheck = Timer.scheduledTimer(withTimeInterval: wait, repeats: false) { [weak self] _ in
+                MainActor.assumeIsolated { self?.adoptStrayFiles() } }
         }
         if !stray.isEmpty { stray.forEach { adoptInFlight.insert($0.path) }; importFiles(stray, move: true, quiet: false) }
     }
@@ -126,6 +134,7 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
         library.removeAll { $0.id == item.id }
         library.insert(item, at: 0)
         saveLibrary()
+        light.forget(item.id)   // imported again: its poster may be new
     }
     func remove(_ item: WallItem) {
         guard let it = libraryItem(item.id) else { return }
@@ -137,6 +146,7 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
         if let t = it.thumbPath, ImportPolicy.isSafeToDelete(t, inside: Paths.thumbs) { try? FileManager.default.removeItem(atPath: t) }
         library.removeAll { $0.id == item.id }
         saveLibrary()
+        light.forget(item.id)
         usage.forget(item.id); saveUsage()
         PreviewRenditions.forget(id: item.id)
         flash("Removed “\(it.title)”")
@@ -170,6 +180,22 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
         library[i].options = o.isDefault ? nil : o
         saveLibrary()
         engine.updateOptions(itemID: item.id, library[i].options)
+    }
+
+    /// Light measured from each wallpaper's poster, for Day & Night "Pick for me" (kept while Lucid runs).
+    @Published private(set) var light = LightBook()
+
+    /// Suggested dawn, day, dusk and night wallpapers from the library, by the light in each poster. The posters are
+    /// read off the main thread; the library is read again afterwards, so a wallpaper removed meanwhile is never picked.
+    func sunPicks() async -> SunPicks {
+        let todo = light.todo(library.filter(\.isLocalReady), exists: FileManager.default.fileExists(atPath:))
+        if !todo.isEmpty {
+            let measured = await Task.detached(priority: .userInitiated) {
+                todo.compactMap { t in PosterLight.stats(path: t.path).map { (t.id, $0) } }
+            }.value
+            light.record(measured, ready: library.filter(\.isLocalReady))
+        }
+        return light.picks(library.filter(\.isLocalReady))
     }
 
     func setDayNight(day: WallItem, night: WallItem, dawn: WallItem? = nil, dusk: WallItem? = nil, screenKey: String?) {

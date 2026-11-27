@@ -23,8 +23,15 @@ extension NSScreen {
 
 // MARK: - Window
 
+/// In a headless development run (Headless.swift) these windows are built and played into but never put on screen:
+/// every way of ordering one in is refused here, so no code path (a new wallpaper, a cross-fade) can draw.
 final class WallpaperWindow: NSWindow {
+    /// Wallpaper windows made and not yet closed (the dev check counts what a change left behind).
+    private(set) static var open = 0
+    private var counted = true
+
     init(screen: NSScreen) {
+        WallpaperWindow.open += 1
         super.init(contentRect: screen.frame, styleMask: [.borderless], backing: .buffered, defer: false)
         level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopWindow)))
         collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
@@ -40,6 +47,15 @@ final class WallpaperWindow: NSWindow {
     }
     override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
+    override func orderFrontRegardless() { if !Headless.active { super.orderFrontRegardless() } }
+    override func order(_ place: NSWindow.OrderingMode, relativeTo other: Int) {
+        if Headless.active && place != .out { return }
+        super.order(place, relativeTo: other)
+    }
+    override func close() {
+        if counted { counted = false; WallpaperWindow.open -= 1 }
+        super.close()
+    }
 }
 
 // MARK: - Layer host for video and image wallpapers
@@ -124,15 +140,10 @@ final class SurfaceHostView: NSView {
     }
 
     private func drawBars(_ bars: [Float]) {
-        let w = bounds.width, h = bounds.height * 0.16, n = CGFloat(bars.count)
-        guard w > 0, n > 0 else { return }
-        let slot = w / n, barW = slot * 0.62
+        let shapes = SpectrumBars.shapes(bars, width: bounds.width, height: bounds.height * 0.16)
+        guard !shapes.isEmpty else { return }
         let path = CGMutablePath()
-        for (i, v) in bars.enumerated() {
-            let bh = max(2, CGFloat(v) * h)
-            path.addRoundedRect(in: CGRect(x: CGFloat(i) * slot + (slot - barW) / 2, y: 0, width: barW, height: bh),
-                                cornerWidth: min(barW / 2, 3), cornerHeight: min(barW / 2, 3))
-        }
+        for s in shapes { path.addRoundedRect(in: s.rect, cornerWidth: s.corner, cornerHeight: s.corner) }
         barsLayer.path = path
     }
 }
@@ -154,7 +165,9 @@ final class SurfaceHostView: NSView {
     var occlusionObserver: NSObjectProtocol?
 
     /// Effective playback speed of an assignment (its own speed, else the app-wide one).
-    static func speed(of a: Assignment) -> Double { (a.options ?? WallpaperOptions()).effectiveSpeed(default: Pref.speed) }
+    static func speed(of a: Assignment) -> Double {
+        HighFrameRate.speed(options: a.options, defaultSpeed: Pref.speed, fps: FrameRates.fps(a.path), halfSpeedOn: Pref.halfSpeedHighFrameRate)
+    }
 
     init(screen: NSScreen, key: String, assignment: Assignment) {
         self.key = key
@@ -183,7 +196,7 @@ final class SurfaceHostView: NSView {
         }
         host?.options = assignment.options ?? WallpaperOptions()
         applyLook()
-        if !Headless.active { window.orderFrontRegardless() }   // headless runs (benchmark) never draw
+        window.orderFrontRegardless()
     }
 
     /// This window's video is playing (a shared player may also run for another display while this one is covered).

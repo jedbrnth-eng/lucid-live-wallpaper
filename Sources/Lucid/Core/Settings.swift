@@ -27,13 +27,19 @@ enum DevMode {
     static let check = checkRequested && ProcessInfo.processInfo.environment["LUCID_SUPPORT_DIR"] != nil
     /// `-lucidBench <video>` was passed: the headless playback benchmark (App/Headless.swift), which never draws.
     static let benchRequested = arg("lucidBench") != nil
-    /// Like the check, the benchmark runs only with LUCID_SUPPORT_DIR set (a throwaway folder).
+    /// `-lucidShots <folder>` was passed: headless PNGs of app screens with a generated demo library (App/DevShots.swift).
+    static let shotsRequested = arg("lucidShots") != nil
+    /// Like the check, these headless runs need LUCID_SUPPORT_DIR (a throwaway folder).
     static let bench = benchRequested && ProcessInfo.processInfo.environment["LUCID_SUPPORT_DIR"] != nil
+    static let shots = shotsRequested && ProcessInfo.processInfo.environment["LUCID_SUPPORT_DIR"] != nil
+    /// This launch is a headless development run (the check, the benchmark or the screenshots; App/Headless.swift):
+    /// the SwiftUI app never starts, nothing is put on screen and the Keychain is never read.
+    static let headless = checkRequested || benchRequested || shotsRequested
     static let checkSuite = "com.jedbrn.lucid.devcheck"
     /// Settings storage: during the check or the benchmark, a separate suite that starts empty every run, so they
     /// never read or change your real preferences (shortcuts, update check, location, speed).
     static let defaults: UserDefaults = {
-        guard check || bench, let s = UserDefaults(suiteName: checkSuite) else { return .standard }
+        guard check || bench || shots, let s = UserDefaults(suiteName: checkSuite) else { return .standard }
         s.removePersistentDomain(forName: checkSuite)
         return s
     }()
@@ -57,8 +63,10 @@ enum Pref {
     /// Release players after this many minutes of pause (0 = never).
     static var releaseAfterMinutes: Int { get { int("releaseAfterMinutes", 5) } set { d.set(newValue, forKey: "releaseAfterMinutes") } }
     static var rotateMinutes: Int { get { d.integer(forKey: "rotateMinutes") } set { d.set(newValue, forKey: "rotateMinutes") } }
-    static var writeStatus: Bool { d.bool(forKey: "writeStatus") }
+    static var writeStatus: Bool { d.bool(forKey: "writeStatus") }   // observed by the engine (UserDefaults.writeStatus)
     static var speed: Double { get { d.object(forKey: "speed") as? Double ?? 1.0 } set { d.set(newValue, forKey: "speed") } }
+    /// Play 240 fps videos (Apple's Aerials) at half speed: half the frames to decode (HighFrameRate). Off by default.
+    static var halfSpeedHighFrameRate: Bool { get { d.bool(forKey: "halfSpeedHighFrameRate") } set { d.set(newValue, forKey: "halfSpeedHighFrameRate") } }
     static var fillScreen: Bool { get { bool("fillScreen", true) } set { d.set(newValue, forKey: "fillScreen") } }
     static var dim: Double { get { d.double(forKey: "dim") } set { d.set(newValue, forKey: "dim") } }
     /// Import "in place": point at your file instead of copying it into Lucid's Media folder (off = copy, the default).
@@ -95,9 +103,12 @@ enum Pref {
 
 // MARK: - Keychain (API keys typed by the user into Settings)
 
+/// Never used in a headless development run: a different build of Lucid reading the login Keychain can make macOS
+/// ask for access, and nobody may be there to answer.
 enum Keychain {
     static let service = "com.jedbrn.lucid"
     static func get(_ k: KeyName) -> String? {
+        guard !DevMode.headless else { return nil }
         let q: [CFString: Any] = [kSecClass: kSecClassGenericPassword, kSecAttrService: service,
                                   kSecAttrAccount: k.rawValue, kSecReturnData: true, kSecMatchLimit: kSecMatchLimitOne]
         var out: CFTypeRef?
@@ -106,6 +117,7 @@ enum Keychain {
         return (s?.isEmpty ?? true) ? nil : s
     }
     static func set(_ k: KeyName, _ v: String) {
+        guard !DevMode.headless else { return }
         let base: [CFString: Any] = [kSecClass: kSecClassGenericPassword, kSecAttrService: service, kSecAttrAccount: k.rawValue]
         SecItemDelete(base as CFDictionary)
         let t = v.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -113,4 +125,9 @@ enum Keychain {
         var add = base; add[kSecValueData] = Data(t.utf8)
         SecItemAdd(add as CFDictionary, nil)
     }
+}
+
+extension UserDefaults {
+    /// Key-value observable, so the status file starts and stops with `defaults write com.jedbrn.lucid writeStatus`.
+    @objc dynamic var writeStatus: Bool { bool(forKey: "writeStatus") }
 }

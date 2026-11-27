@@ -2,11 +2,17 @@
 Sources/Lucid/Audio/AudioAnalyser.swift
 Sources/Lucid/Audio/Reactive.swift
 Sources/Lucid/DayNight/SunTimes.swift
+Sources/Lucid/DayNight/SunPicker.swift
+Sources/Lucid/Media/PosterLight.swift
 Sources/Lucid/Core/Models.swift
 Sources/Lucid/Engine/PausePolicy.swift
 Sources/Lucid/Engine/ProcessMeter.swift
 Sources/Lucid/Engine/PlayerShare.swift
 Sources/Lucid/Engine/SharedPlayers.swift
+Sources/Lucid/Engine/HighFrameRate.swift
+Sources/Lucid/Engine/PowerMonitor.swift
+Sources/Lucid/Core/Periodic.swift
+Sources/Lucid/Core/DirectoryWatcher.swift
 Sources/Lucid/Media/ImportPolicy.swift
 Sources/Lucid/Store/PlaylistScheduler.swift
 Sources/Lucid/Hotkeys/Hotkey.swift

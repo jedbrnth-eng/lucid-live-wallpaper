@@ -21,14 +21,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
     func applicationDidFinishLaunching(_ n: Notification) {
         MainActor.assumeIsolated {
-            if DevMode.checkRequested && !DevMode.check {
-                FileHandle.standardError.write(Data("lucidCheck needs LUCID_SUPPORT_DIR (a throwaway folder); refusing to run it on your library.\n".utf8))
-                exit(2)
-            }
-            if DevMode.check { LucidEngine.setsDesktopPicture = false }
             let store = Store.shared
             store.engine.refresh()
-            if DevMode.check { Task { @MainActor in await DevCheck.run(store) }; return }
             store.startDownloadsWatcher()
             HotkeyCenter.shared.handler = { action in
                 switch action {
@@ -118,7 +112,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 enum LucidMain {
     static func main() {
         MainActor.assumeIsolated {
-            if DevMode.benchRequested { Headless.runBench() } else { LucidApp.main() }
+            if DevMode.checkRequested { Headless.runCheck() }
+            else if DevMode.benchRequested { Headless.runBench() }
+            else if DevMode.shotsRequested { Headless.runShots() }
+            else { LucidApp.main() }
         }
     }
 }
