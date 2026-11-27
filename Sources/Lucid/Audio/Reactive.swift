@@ -31,3 +31,18 @@ enum ReactiveMapper {
         return l
     }
 }
+
+/// The spectrum bars as shapes: one bar per band in its slot, bottom-aligned and at least 2 pt tall (`height` is a
+/// full bar). The corner always fits the bar: CoreGraphics on macOS 15 aborts the app when a rounded rect's corner
+/// is more than half a side, and every quiet 2 pt bar used to get the usual 3 pt corner.
+enum SpectrumBars {
+    static func shapes(_ bars: [Float], width: CGFloat, height: CGFloat) -> [(rect: CGRect, corner: CGFloat)] {
+        let n = CGFloat(bars.count)
+        guard width > 0, n > 0 else { return [] }
+        let slot = width / n, barW = slot * 0.62
+        return bars.enumerated().map { i, v in
+            let bh = max(2, (v.isFinite ? CGFloat(max(v, 0)) : 0) * height)
+            return (CGRect(x: CGFloat(i) * slot + (slot - barW) / 2, y: 0, width: barW, height: bh), max(0, min(3, barW / 2, bh / 2)))
+        }
+    }
+}

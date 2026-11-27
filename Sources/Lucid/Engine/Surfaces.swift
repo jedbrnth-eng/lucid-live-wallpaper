@@ -124,15 +124,10 @@ final class SurfaceHostView: NSView {
     }
 
     private func drawBars(_ bars: [Float]) {
-        let w = bounds.width, h = bounds.height * 0.16, n = CGFloat(bars.count)
-        guard w > 0, n > 0 else { return }
-        let slot = w / n, barW = slot * 0.62
+        let shapes = SpectrumBars.shapes(bars, width: bounds.width, height: bounds.height * 0.16)
+        guard !shapes.isEmpty else { return }
         let path = CGMutablePath()
-        for (i, v) in bars.enumerated() {
-            let bh = max(2, CGFloat(v) * h)
-            path.addRoundedRect(in: CGRect(x: CGFloat(i) * slot + (slot - barW) / 2, y: 0, width: barW, height: bh),
-                                cornerWidth: min(barW / 2, 3), cornerHeight: min(barW / 2, 3))
-        }
+        for s in shapes { path.addRoundedRect(in: s.rect, cornerWidth: s.corner, cornerHeight: s.corner) }
         barsLayer.path = path
     }
 }

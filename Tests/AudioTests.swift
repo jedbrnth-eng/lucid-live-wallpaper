@@ -12,6 +12,16 @@ private func sine(_ hz: Double, amp: Float = 1, n: Int = 4096, rate: Double = 48
 private func argmax(_ a: [Float]) -> Int { a.indices.max { a[$0] < a[$1] } ?? -1 }
 
 func registerAudioTests() {
+    test("Audio: spectrum bar corners fit the bar (CoreGraphics on macOS 15 aborts when a quiet 2 pt bar gets a 3 pt corner)") {
+        let shapes = SpectrumBars.shapes([0, 0.001, 0.02, 0.5, 1, .nan, .infinity], width: 1920, height: 1080 * 0.16)
+        expectEqual(shapes.count, 7)
+        for s in shapes {
+            expect(s.corner >= 0 && 2 * s.corner <= s.rect.height && 2 * s.corner <= s.rect.width, "\(s)")
+            expect(s.rect.height >= 2 && s.rect.height <= 1080 * 0.16 + 2, "height \(s.rect.height)")
+        }
+        expectEqual(shapes[4].corner, 3, "a full bar keeps its 3 pt corner")
+        expect(SpectrumBars.shapes([0.5], width: 0, height: 100).isEmpty, "no width: nothing to draw")
+    }
     test("Audio: 80 Hz sine reads as bass") {
         let f = AudioAnalyser(sampleRate: 48_000).analyse(left: sine(80), right: sine(80))
         expect(f.bass > 0.8, "bass \(f.bass)")
