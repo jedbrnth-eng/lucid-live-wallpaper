@@ -6,6 +6,17 @@
 import Foundation
 
 func registerPauseTests() {
+    test("Playback: a window fading out stops with a global pause (it may share its player with a display that paused)") {
+        expect(!RunDecision.shouldRun(global: .user, covered: false, fadingOut: true, wasRunning: true), "paused by you during the 1.2 s fade")
+        expect(!RunDecision.shouldRun(global: .asleep, covered: false, fadingOut: true, wasRunning: true))
+        expect(RunDecision.shouldRun(global: nil, covered: false, fadingOut: true, wasRunning: true), "keeps moving while nothing pauses")
+        expect(!RunDecision.shouldRun(global: nil, covered: false, fadingOut: true, wasRunning: false), "never starts again")
+    }
+    test("Playback: an on-screen window runs unless paused globally or covered") {
+        expect(RunDecision.shouldRun(global: nil, covered: false, fadingOut: false, wasRunning: false))
+        expect(!RunDecision.shouldRun(global: nil, covered: true, fadingOut: false, wasRunning: true))
+        expect(!RunDecision.shouldRun(global: .lowPower, covered: false, fadingOut: false, wasRunning: true))
+    }
     let prefs = PausePrefs(pauseOnBattery: false, batteryBelowPercent: 20, pauseLowPower: true,
                            thermalLimit: .serious, cpuAbovePercent: 0, pauseWhenCovered: true)
 

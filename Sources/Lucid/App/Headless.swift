@@ -35,7 +35,7 @@ import AppKit
                 : await PlaybackBench.run(files: PlaybackBench.videos(at: target), displays: displays.isEmpty ? [1, 2] : displays,
                                           seconds: max(2, seconds), rounds: max(1, rounds))
             let out = Paths.support.appendingPathComponent("bench.json")
-            if let d = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) { try? d.write(to: out) }
+            if let d = try? JSONSerialization.data(withJSONObject: ProcessMeter.jsonSafe(report), options: [.prettyPrinted, .sortedKeys]) { try? d.write(to: out) }
             print("BENCH \(out.path)")
             exit(0)
         }

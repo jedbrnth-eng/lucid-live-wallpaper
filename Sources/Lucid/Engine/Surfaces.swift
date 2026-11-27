@@ -149,7 +149,7 @@ final class SurfaceHostView: NSView {
     /// The speed this window's player was made for. A new speed means a new window (LucidEngine.refresh cross-fades).
     let playSpeed: Double
     private let holder = UUID().uuidString
-    private var wantsRun = false
+    private(set) var wantsRun = false
     var visible = true
     var occlusionObserver: NSObjectProtocol?
 

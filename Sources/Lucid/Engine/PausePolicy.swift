@@ -69,6 +69,16 @@ enum PausePolicy {
 
 enum DisplayPlayback: Equatable { case playing, covered }
 
+/// Whether one wallpaper window's video should run. A window on screen runs unless a global pause or its cover
+/// stops it. A window cross-fading out (1.2 s) is still on screen, so it keeps what it had, but it never starts
+/// again and it stops with a global pause: it may share its player with a display that has just paused.
+enum RunDecision {
+    static func shouldRun(global: PauseReason?, covered: Bool, fadingOut: Bool, wasRunning: Bool) -> Bool {
+        if fadingOut { return wasRunning && global == nil }
+        return global == nil && !covered
+    }
+}
+
 enum PlaybackStatus {
     /// "Playing", "Paused: Low Power Mode", "Playing (1 of 2 displays paused: full-screen app)".
     static func text(global: PauseReason?, displays: [DisplayPlayback]) -> String {

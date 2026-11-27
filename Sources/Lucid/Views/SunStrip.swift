@@ -10,8 +10,8 @@ struct SunStrip: View {
     struct Slot: Identifiable {
         let part: DayPart
         var title: String?
-        var thumbURL: String?
-        var thumbPath: String?
+        /// A picture on this Mac (SunPicker.posterPath); the strip never loads anything from the web.
+        var posterPath: String?
         var starts: Date?
         var tint: Color?
         var isNow = false
@@ -45,7 +45,7 @@ struct SunStrip: View {
             }
             ZStack {
                 if s.title != nil {
-                    RemoteImage(url: s.thumbURL, localPath: s.thumbPath)
+                    RemoteImage(url: nil, localPath: s.posterPath)
                 } else {
                     RoundedRectangle(cornerRadius: Theme.radiusSmall)
                         .strokeBorder(Theme.line, style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
