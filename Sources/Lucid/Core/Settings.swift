@@ -60,7 +60,7 @@ enum Pref {
     /// Release players after this many minutes of pause (0 = never).
     static var releaseAfterMinutes: Int { get { int("releaseAfterMinutes", 5) } set { d.set(newValue, forKey: "releaseAfterMinutes") } }
     static var rotateMinutes: Int { get { d.integer(forKey: "rotateMinutes") } set { d.set(newValue, forKey: "rotateMinutes") } }
-    static var writeStatus: Bool { d.bool(forKey: "writeStatus") }
+    static var writeStatus: Bool { d.bool(forKey: "writeStatus") }   // observed by the engine (UserDefaults.writeStatus)
     static var speed: Double { get { d.object(forKey: "speed") as? Double ?? 1.0 } set { d.set(newValue, forKey: "speed") } }
     static var fillScreen: Bool { get { bool("fillScreen", true) } set { d.set(newValue, forKey: "fillScreen") } }
     static var dim: Double { get { d.double(forKey: "dim") } set { d.set(newValue, forKey: "dim") } }
@@ -116,4 +116,9 @@ enum Keychain {
         var add = base; add[kSecValueData] = Data(t.utf8)
         SecItemAdd(add as CFDictionary, nil)
     }
+}
+
+extension UserDefaults {
+    /// Key-value observable, so the status file starts and stops with `defaults write com.jedbrn.lucid writeStatus`.
+    @objc dynamic var writeStatus: Bool { bool(forKey: "writeStatus") }
 }

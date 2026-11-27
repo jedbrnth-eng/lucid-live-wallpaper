@@ -31,7 +31,13 @@ import ImageIO
     /// Players were released after a long pause; rebuilt on resume.
     private(set) var parked = false
     var now: () -> Date = Date.init
-    private var timers: [Timer] = []
+    /// Periodic work that runs only while its feature is on: the CPU limit's sampler and the diagnostic status file.
+    private lazy var cpuSampler = Periodic(every: 5) { [weak self] in self?.sampleCPU() }
+    private lazy var statusWriter = Periodic(every: 3) { [weak self] in self?.writeStatus() }
+    private var statusObservation: NSKeyValueObservation?
+    /// One wake-up when a long global pause is due to release the players.
+    private var idleReleaseTimer: Timer?
+    private var idleReleaseAt: Date?
     private var observers: [NSObjectProtocol] = []
     private var powerMonitor: PowerMonitor?
     static let crossfade: TimeInterval = 1.2
@@ -303,6 +309,7 @@ import ImageIO
 
     func updatePlayback() {
         power.userPaused = state.userPaused
+        syncCPUSampler()
         let kind = PausePolicy.reason(power, pausePrefs)
         pauseKind = kind
         pauseReason = kind.map { $0.label.prefix(1).uppercased() + $0.label.dropFirst() }
@@ -310,6 +317,7 @@ import ImageIO
             pausedSince = nil
             if parked { unpark(); return }
         } else if pausedSince == nil { pausedSince = now() }
+        armIdleRelease()
         var needAudio = false
         var displays: [DisplayPlayback] = []
         for s in surfaces.values {
@@ -335,6 +343,20 @@ import ImageIO
     /// Closes every wallpaper window (and its player and decoded frames) while a global pause lasts long.
     /// The desktop picture (a still of each wallpaper) shows meanwhile. Covered displays are not parked:
     /// their window is needed to notice when they are uncovered.
+    /// One wake-up at the moment a long global pause is due to release the players (instead of a check every 20 s).
+    /// Re-armed whenever the pause, the setting or the windows change; nothing is armed while playing.
+    private func armIdleRelease() {
+        let at = parked || surfaces.isEmpty ? nil : IdleRelease.deadline(pausedSince: pausedSince, afterMinutes: Pref.releaseAfterMinutes)
+        guard at != idleReleaseAt else { return }
+        idleReleaseTimer?.invalidate(); idleReleaseTimer = nil
+        idleReleaseAt = at
+        guard let at else { return }
+        let t = Timer(fire: at, interval: 0, repeats: false) { [weak self] _ in MainActor.assumeIsolated { self?.checkIdleRelease() } }
+        t.tolerance = 5
+        RunLoop.main.add(t, forMode: .common)
+        idleReleaseTimer = t
+    }
+
     func checkIdleRelease() {
         guard !parked, !surfaces.isEmpty, IdleRelease.shouldRelease(pausedSince: pausedSince, now: now(), afterMinutes: Pref.releaseAfterMinutes) else { return }
         park()
@@ -375,6 +397,13 @@ import ImageIO
     }
 
     /// Every 5 s while the CPU limit is on: whole-Mac CPU use, averaged over 30 s by the gate.
+    /// The CPU limit samples every 5 s, only while it is on (Settings: pause while the CPU is busy).
+    private func syncCPUSampler() {
+        let on = Pref.cpuAbovePercent > 0
+        if !on { lastTicks = nil; power.cpuBusy = false }
+        cpuSampler.set(on)
+    }
+
     private func sampleCPU() {
         if cpuGate.thresholdPercent != Pref.cpuAbovePercent { cpuGate = CPUGate(thresholdPercent: Pref.cpuAbovePercent, window: 6) }
         guard Pref.cpuAbovePercent > 0 else { lastTicks = nil; if power.cpuBusy { power.cpuBusy = false; updatePlayback() }; return }
@@ -435,12 +464,11 @@ import ImageIO
         observers.append(NotificationCenter.default.addObserver(forName: ProcessInfo.thermalStateDidChangeNotification, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.power.thermal = Self.thermal(); self?.updatePlayback() } })
         observePowerSource()
-        timers.append(Timer.scheduledTimer(withTimeInterval: 20, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.checkIdleRelease() } })
-        timers.append(Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.sampleCPU() } })
-        timers.append(Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.writeStatus() } })
+        // Nothing polls while it has nothing to do: the status file runs only while `writeStatus` is on (also when
+        // set with `defaults write` while Lucid runs); updatePlayback arms the CPU sampler and the long-pause release.
+        statusObservation = Pref.d.observe(\.writeStatus, options: [.initial, .new]) { [weak self] _, _ in
+            DispatchQueue.main.async { MainActor.assumeIsolated { self?.statusWriter.set(Pref.writeStatus) } }
+        }
     }
 
     /// Diagnostic snapshot (only when `defaults write com.jedbrn.lucid writeStatus -bool YES`).

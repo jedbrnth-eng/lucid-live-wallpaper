@@ -149,6 +149,11 @@ enum PowerSources {
 /// After a long pause, players and their decoded frames are released (the still desktop picture shows meanwhile)
 /// and rebuilt on resume.
 enum IdleRelease {
+    /// When the release is due: `afterMinutes` after a global pause began; nil when not paused or set to never.
+    static func deadline(pausedSince: Date?, afterMinutes: Int) -> Date? {
+        guard let t = pausedSince, afterMinutes > 0 else { return nil }
+        return t.addingTimeInterval(Double(afterMinutes) * 60)
+    }
     static func shouldRelease(pausedSince: Date?, now: Date, afterMinutes: Int) -> Bool {
         guard let t = pausedSince, afterMinutes > 0 else { return false }
         let e = now.timeIntervalSince(t)
