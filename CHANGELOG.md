@@ -6,6 +6,7 @@ All notable changes to Lucid. The format follows [Keep a Changelog](https://keep
 
 ### Added
 - **Pick for me in Day & Night.** Open Day/Night and the four slots are already filled from your library, chosen by the light in each wallpaper: the darkest for night, the brightest for day, an orange one for dusk and a soft pink or mauve one for dawn (words like "sunset" or "stars" in a title help). Dawn and dusk stay empty when nothing looks like them. The sheet now shows the four picks as a strip in the order the day plays them, with today's start time for each and a bar of their colours. Change any of them before you press Set; a saved Day/Night pair opens as it is.
+- **Half speed for 240 fps videos** (Settings → Look, off by default). Apple's Aerials are filmed at 240 frames a second, more than any display shows. Turn this on and Lucid plays them at half speed, in slow motion, so it decodes half as many frames. Measured offscreen on an M4 Max with the setting off and on in turn, at the same load: about a fifth less CPU energy for Lucid's process (CPU time about the same). A speed you set on a wallpaper still wins, and other videos keep their speed.
 
 ### Changed
 - **One video, one decoder, on every display.** When the same video plays on several displays (the usual Apply sets it on all of them), Lucid now decodes it once and shows that one player on every display, so every display shows the same frame. Before, each display decoded its own copy. Measured with the new benchmark: a second display used to add 56–106% to Lucid's CPU use and 59–92% to its CPU energy; now it adds at most 22% (often nothing). When one display is covered by a full-screen app, the shared video keeps playing for the others and pauses once none shows it. Changing a wallpaper's speed now cross-fades into the new speed from the same moment.
@@ -13,6 +14,7 @@ All notable changes to Lucid. The format follows [Keep a Changelog](https://keep
 ### Developer
 - `-lucidShots <folder>` (with `LUCID_SUPPORT_DIR`) renders app screens to PNG with a generated demo library, also without anything on screen. Headless runs never read the Keychain.
 - `-lucidBench <video or folder>` (with `LUCID_SUPPORT_DIR`) measures what playback costs Lucid per video and per number of displays, and writes `bench.json`. It never starts the app's windows, menu-bar item or Dock icon and never puts anything on screen, so it is safe next to your everyday copy. It records the Mac's load average with every run, because other work skews the figures.
+- `-benchHalfSpeed off,on` runs every benchmark round with the half-speed setting off and then on, so the two are compared in one process at the same load.
 
 ### Security
 - **Releases carry a build attestation**: a record, signed through GitHub, that `Lucid.zip` was built by the release workflow from a given commit. Check one with `gh attestation verify Lucid.zip --repo jedbrnth-eng/lucid-live-wallpaper`.
