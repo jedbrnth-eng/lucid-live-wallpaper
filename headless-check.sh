@@ -37,7 +37,11 @@ else
   echo "PASS  Keychain: tripwire loaded, 0 calls"
 fi
 [ "$check_rc" -eq 0 ] || { echo "FAIL  the check exited with $check_rc"; tail -20 "$WORK/check.out"; fail=1; }
-[ -s "$WORK/support/check.json" ] || { echo "FAIL  no check.json (the check did not finish)"; fail=1; }
+if [ -s "$WORK/support/check.json" ]; then
+  python3 tools/headless/check-json.py "$WORK/support/check.json" && echo "PASS  check.json: no error, no window at the end" || fail=1
+else
+  echo "FAIL  no check.json (the check did not finish)"; fail=1
+fi
 [ "$watch_rc" -eq 0 ] && echo "PASS  windows: none on screen, desktop pictures unchanged"
 echo "Results in $WORK (check.json, windows.txt, keychain.log)"
 exit $fail
