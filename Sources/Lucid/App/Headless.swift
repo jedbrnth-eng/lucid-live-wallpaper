@@ -8,6 +8,7 @@
 // your everyday copy of Lucid plays. Used by the playback benchmark:
 //   LUCID_SUPPORT_DIR=/tmp/lucid-bench build/Lucid.app/Contents/MacOS/Lucid -lucidBench <video or folder>
 //       [-benchDisplays 1,2,3] [-benchSeconds 20] [-benchRounds 3]
+// `-lucidBench idle` measures the app itself (store, engine, Day/Night, folder watching) with nothing playing.
 // It writes bench.json in LUCID_SUPPORT_DIR and quits. See PlaybackBench.swift for what is measured.
 // Screenshots of app screens with a generated demo library (DevShots.swift):
 //   LUCID_SUPPORT_DIR=/tmp/lucid-shots build/Lucid.app/Contents/MacOS/Lucid -lucidShots <output folder>
@@ -30,8 +31,9 @@ import AppKit
         let seconds = DevMode.arg("benchSeconds").flatMap(Double.init) ?? 20
         let rounds = DevMode.arg("benchRounds").flatMap(Int.init) ?? 3
         Task { @MainActor in
-            let report = await PlaybackBench.run(files: PlaybackBench.videos(at: target), displays: displays.isEmpty ? [1, 2] : displays,
-                                                 seconds: max(2, seconds), rounds: max(1, rounds))
+            let report = target == "idle" ? await PlaybackBench.idle(seconds: max(2, seconds), rounds: max(1, rounds))
+                : await PlaybackBench.run(files: PlaybackBench.videos(at: target), displays: displays.isEmpty ? [1, 2] : displays,
+                                          seconds: max(2, seconds), rounds: max(1, rounds))
             let out = Paths.support.appendingPathComponent("bench.json")
             if let d = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) { try? d.write(to: out) }
             print("BENCH \(out.path)")
