@@ -13,6 +13,8 @@ enum TestVideo {
     static let path: String? = {
         let u = FileManager.default.temporaryDirectory.appendingPathComponent("lucid-test-\(getpid()).mov")
         try? FileManager.default.removeItem(at: u)
+        // Shared by every test that needs a video; removed when the test run exits.
+        atexit { try? FileManager.default.removeItem(at: FileManager.default.temporaryDirectory.appendingPathComponent("lucid-test-\(getpid()).mov")) }
         guard let w = try? AVAssetWriter(outputURL: u, fileType: .mov) else { return nil }
         let input = AVAssetWriterInput(mediaType: .video, outputSettings: [AVVideoCodecKey: AVVideoCodecType.jpeg, AVVideoWidthKey: 320, AVVideoHeightKey: 180])
         let px = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: input, sourcePixelBufferAttributes: [
@@ -46,7 +48,6 @@ func registerSharedPlayerTests() {
     }
     test("Shared players: a new-speed player starts where the old one is, not from 0 (speed change)") {
         guard let v = TestVideo.path else { expect(false, "could not write the test video"); return }
-        defer { try? FileManager.default.removeItem(atPath: v) }
         MainActor.assumeIsolated {
             let sp = SharedPlayers()
             let p = sp.acquire(path: v, speed: 0.5, holder: "new")
@@ -63,7 +64,7 @@ func registerSharedPlayerTests() {
         }
     }
     test("Shared players: a seek still waiting when the last window closes is dropped safely") {
-        guard let v = TestVideo.path else { expect(false, "could not write the test video"); return }
+        guard let v = TestVideo.path, FileManager.default.fileExists(atPath: v) else { expect(false, "no test video"); return }
         MainActor.assumeIsolated {
             let sp = SharedPlayers()
             _ = sp.acquire(path: v, speed: 1, holder: "a")
