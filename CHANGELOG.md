@@ -9,6 +9,7 @@ All notable changes to Lucid. The format follows [Keep a Changelog](https://keep
 - **Half speed for 240 fps videos** (Settings → Look, off by default). Apple's Aerials are filmed at 240 frames a second, more than any display shows. Turn this on and Lucid plays them at half speed, in slow motion, so it decodes half as many frames. Measured offscreen on an M4 Max with the setting off and on in turn, at the same load: 11–21 % less CPU energy for Lucid's own process in two runs (CPU time about the same). A speed you set on a wallpaper still wins, and other videos keep their speed.
 
 ### Changed
+- **Lucid sleeps while it waits.** While paused or showing a still image, four timers kept waking Lucid about 0.7 times a second for features that are usually off (the CPU limit, the diagnostic status file), for the long-pause memory release and for a scan of the Lucid folder every 5 seconds. Now each runs only while its feature is on, the memory release is one wake-up at its deadline, and the Lucid folder is watched instead of scanned (a file dropped in still appears, once it has finished copying). Measured idle: 0.7 → 0.05 wakeups a second.
 - **One video, one decoder, on every display.** When the same video plays on several displays (the usual Apply sets it on all of them), Lucid now decodes it once and shows that one player on every display, so every display shows the same frame. Before, each display decoded its own copy. Measured with the new benchmark: a second display used to add 56–106% to Lucid's CPU use and 59–92% to its CPU energy; now it adds at most 22% (often nothing). When one display is covered by a full-screen app, the shared video keeps playing for the others and pauses once none shows it. Changing a wallpaper's speed now cross-fades into the new speed from the same moment.
 
 ### Developer
@@ -19,6 +20,10 @@ All notable changes to Lucid. The format follows [Keep a Changelog](https://keep
 ### Security
 - **Releases carry a build attestation**: a record, signed through GitHub, that `Lucid.zip` was built by the release workflow from a given commit. Check one with `gh attestation verify Lucid.zip --repo jedbrnth-eng/lucid-live-wallpaper`.
 - The workflows use `actions/checkout` at a fixed commit instead of a moving tag, don't leave its token on disk, and Dependabot proposes the updates.
+
+### Fixed
+- **Unplugging is noticed at once.** Lucid used to check the power source every 20 seconds, so with "pause on battery" on, the video kept playing for up to 20 seconds after you unplugged. macOS now tells Lucid the moment the power source or the charge changes, and the 20-second check is gone.
+- **A UPS's charge no longer counts as your Mac's battery.** With a UPS connected, its charge could be read instead of the Mac's own battery and pause Lucid for "battery low" while the Mac was well charged.
 
 ## [1.3.0] - 2026-10-26
 

@@ -9,6 +9,9 @@ Sources/Lucid/Engine/ProcessMeter.swift
 Sources/Lucid/Engine/PlayerShare.swift
 Sources/Lucid/Engine/SharedPlayers.swift
 Sources/Lucid/Engine/HighFrameRate.swift
+Sources/Lucid/Engine/PowerMonitor.swift
+Sources/Lucid/Core/Periodic.swift
+Sources/Lucid/Core/DirectoryWatcher.swift
 Sources/Lucid/Media/ImportPolicy.swift
 Sources/Lucid/Store/PlaylistScheduler.swift
 Sources/Lucid/Hotkeys/Hotkey.swift

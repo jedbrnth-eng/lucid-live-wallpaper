@@ -50,7 +50,10 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
     /// Playing playlists, one per scope (display key, or "*" for all displays). Saved in playback.json.
     @Published private(set) var runs: [String: PlaylistRun] = [:]
     var downloadsTimer: Timer?
-    var folderTimer: Timer?
+    /// Media/ and the Lucid folder are watched (pushed by the file system), not scanned every few seconds.
+    private var folderWatch: DirectoryWatcher?
+    /// One look later at files that were still being written.
+    private var strayRecheck: Timer?
     var adoptInFlight: Set<String> = []
     private var importsInFlight: Set<String> = []
     var watchSince: Date?
@@ -87,8 +90,8 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
         for s in Source.discoverable { discover[s] = DiscoverState() }
         scheduleRotation()
         adoptStrayFiles()
-        // Keep watching: files dropped into the Lucid folder while the app is open appear within seconds.
-        folderTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
+        // Keep watching: files dropped into the Lucid folder while the app is open appear at once.
+        folderWatch = DirectoryWatcher([Paths.media, Paths.support]) { [weak self] in
             MainActor.assumeIsolated { self?.adoptStrayFiles() }
         }
     }
@@ -98,7 +101,7 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
     func adoptStrayFiles() {
         let fm = FileManager.default
         let known = Set(library.compactMap(\.localPath))
-        var stray: [URL] = []
+        var stray: [URL] = [], settling: [Date] = []
         for dir in [Paths.media, Paths.support] {
             let e = fm.enumerator(at: dir, includingPropertiesForKeys: [.isRegularFileKey, .contentModificationDateKey],
                                   options: [.skipsHiddenFiles, .skipsSubdirectoryDescendants])
@@ -106,9 +109,14 @@ enum LibFilter: String, CaseIterable { case all = "All", videos = "Videos", phot
                 if known.contains(f.path) || adoptInFlight.contains(f.path) || f.lastPathComponent.contains(".loop.") { continue }
                 if Media.kind(of: f) == nil { continue }
                 if let m = try? f.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate,
-                   Date().timeIntervalSince(m) < 15 { continue }   // still being written
+                   !ImportPolicy.isSettled(modified: m, now: Date()) { settling.append(m); continue }   // still being written
                 stray.append(f)
             }
+        }
+        strayRecheck?.invalidate(); strayRecheck = nil
+        if let wait = ImportPolicy.recheckDelay(modified: settling, now: Date()) {
+            strayRecheck = Timer.scheduledTimer(withTimeInterval: wait, repeats: false) { [weak self] _ in
+                MainActor.assumeIsolated { self?.adoptStrayFiles() } }
         }
         if !stray.isEmpty { stray.forEach { adoptInFlight.insert($0.path) }; importFiles(stray, move: true, quiet: false) }
     }

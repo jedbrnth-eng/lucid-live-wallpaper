@@ -109,7 +109,7 @@ struct SettingsView: View {
                     Picker("Free memory after a pause of", selection: $release) {
                         Text("Never").tag(0); ForEach([1, 5, 15], id: \.self) { Text("\($0) min").tag($0) }
                     }.frame(maxWidth: 300)
-                        .onChange(of: release) { _, v in Pref.releaseAfterMinutes = v }
+                        .onChange(of: release) { _, v in Pref.releaseAfterMinutes = v; engine.updatePlayback() }
                     Text("Always paused while the screen is locked or the display sleeps. Video is muted and hardware-decoded. After a long pause the video players are closed to free memory (the still desktop picture shows) and reopen when playback resumes.").font(.caption).foregroundStyle(.secondary)
                 }.frame(maxWidth: .infinity, alignment: .leading).padding(6)
             }

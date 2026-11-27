@@ -94,6 +94,34 @@ import AVFoundation
                 "scope": "this process only: decode and playback; not the window server, the display or media-engine power"]
     }
 
+    /// `-lucidBench idle`: the real app state (the Store with its engine, Day/Night, weather and folder watching) with
+    /// nothing playing and no window, measured like a playback run. What Lucid costs while it only waits; most of
+    /// it is timer wakeups.
+    static func idle(seconds: Double, rounds: Int) async -> [String: Any] {
+        let store = Store.shared
+        store.engine.refresh()
+        await wait(warmUp)
+        var rs: [ProcessRates] = [], loads: [Double] = []
+        for _ in 0..<rounds {
+            let s0 = ProcessMeter.sample(), l0 = ProcessMeter.load1()
+            await wait(seconds)
+            let s1 = ProcessMeter.sample(), l1 = ProcessMeter.load1()
+            rs.append(ProcessMeter.rates(from: s0, to: s1))
+            loads.append(((l0 + l1) / 2 * 10).rounded() / 10)
+        }
+        let row: [String: Any] = [
+            "scenario": "idle", "wallpaper_windows": store.engine.surfaces.count, "video_players": SharedPlayers.shared.count,
+            "wakeups_per_s": ProcessMeter.median(rs.map(\.wakeupsPerSecond)), "wakeups_per_s_rounds": rs.map(\.wakeupsPerSecond),
+            "cpu_pct": ProcessMeter.median(rs.map(\.cpuPercent)), "cpu_pct_rounds": rs.map(\.cpuPercent),
+            "cpu_energy_mw": ProcessMeter.median(rs.map(\.energyMilliwatts)), "footprint_mb": ProcessMeter.median(rs.map(\.footprintMB)),
+            "load1": ProcessMeter.median(loads), "load1_rounds": loads,
+        ]
+        return ["seconds_per_run": seconds, "warm_up_seconds": warmUp, "rounds": rounds, "cpu": ProcessMeter.cpuBrand,
+                "cores": ProcessInfo.processInfo.activeProcessorCount,
+                "os": ProcessInfo.processInfo.operatingSystemVersionString, "results": [row],
+                "scope": "this process only, nothing playing: the app's own timers and housekeeping"]
+    }
+
     /// Codec, size, frame rate and length, for the report.
     private static func describe(_ path: String) async -> [String: Any] {
         let asset = AVURLAsset(url: URL(fileURLWithPath: path))
