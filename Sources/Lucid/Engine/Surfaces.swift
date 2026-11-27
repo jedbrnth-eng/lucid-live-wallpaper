@@ -165,7 +165,9 @@ final class SurfaceHostView: NSView {
     var occlusionObserver: NSObjectProtocol?
 
     /// Effective playback speed of an assignment (its own speed, else the app-wide one).
-    static func speed(of a: Assignment) -> Double { (a.options ?? WallpaperOptions()).effectiveSpeed(default: Pref.speed) }
+    static func speed(of a: Assignment) -> Double {
+        HighFrameRate.speed(options: a.options, defaultSpeed: Pref.speed, fps: FrameRates.fps(a.path), halfSpeedOn: Pref.halfSpeedHighFrameRate)
+    }
 
     init(screen: NSScreen, key: String, assignment: Assignment) {
         self.key = key
