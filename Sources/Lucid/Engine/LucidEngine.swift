@@ -33,6 +33,7 @@ import ImageIO
     var now: () -> Date = Date.init
     private var timers: [Timer] = []
     private var observers: [NSObjectProtocol] = []
+    private var powerMonitor: PowerMonitor?
     static let crossfade: TimeInterval = 1.2
     /// Off only in the headless dev check, so it never changes your real desktop picture.
     static var setsDesktopPicture = true
@@ -56,7 +57,6 @@ import ImageIO
         power.lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
         power.thermal = Self.thermal()
         power.userPaused = state.userPaused
-        checkBattery()
         observe()
     }
 
@@ -391,28 +391,25 @@ import ImageIO
     }
     func resetAudioLooks() { surfaces.values.forEach { $0.resetReactive() } }
 
-    /// Reads the power source; called at launch and whenever macOS reports a change (unplug, plug in, charge).
-    private func checkBattery() {
+    /// The power source right now (IOPS). "Copy" results are owned by us, "Get" results are not (CF naming rule).
+    private static func readPowerSource() -> PowerReading? {
         guard let blob = IOPSCopyPowerSourcesInfo()?.takeRetainedValue(),
-              let type = IOPSGetProvidingPowerSourceType(blob)?.takeRetainedValue() as String? else { return }
+              let type = IOPSGetProvidingPowerSourceType(blob)?.takeUnretainedValue() as String? else { return nil }
         let list = IOPSCopyPowerSourcesList(blob)?.takeRetainedValue() as? [CFTypeRef] ?? []
         let sources = list.compactMap { IOPSGetPowerSourceDescription(blob, $0)?.takeUnretainedValue() as? [String: Any] }
-        let r = PowerSources.reading(providing: type, sources: sources)
-        if r.onBattery != power.onBattery || r.percent != power.batteryPercent {
-            power.onBattery = r.onBattery; power.batteryPercent = r.percent; updatePlayback()
-        }
+        return PowerSources.reading(providing: type, sources: sources)
     }
 
-    /// macOS pushes power-source changes (IOPSNotificationCreateRunLoopSource), so unplugging pauses at once
-    /// instead of at the next poll. The engine lives as long as the app, so the unretained pointer stays valid.
+    /// Unplugging, plugging in and charge changes are pushed by macOS (and re-read on wake) by PowerMonitor.
     private func observePowerSource() {
-        let me = Unmanaged.passUnretained(self).toOpaque()
-        guard let src = IOPSNotificationCreateRunLoopSource({ ctx in
-            guard let ctx else { return }
-            let engine = Unmanaged<LucidEngine>.fromOpaque(ctx).takeUnretainedValue()
-            MainActor.assumeIsolated { engine.checkBattery() }
-        }, me)?.takeRetainedValue() else { return }
-        CFRunLoopAddSource(CFRunLoopGetMain(), src, .defaultMode)
+        powerMonitor = PowerMonitor(read: Self.readPowerSource, wakeCenter: NSWorkspace.shared.notificationCenter,
+                                    wakeNames: [NSWorkspace.didWakeNotification, NSWorkspace.screensDidWakeNotification],
+                                    makeSource: { IOPSNotificationCreateRunLoopSource(PowerMonitor.callback, $0)?.takeRetainedValue() }) { [weak self] r in
+            MainActor.assumeIsolated {
+                guard let self, r.onBattery != self.power.onBattery || r.percent != self.power.batteryPercent else { return }
+                self.power.onBattery = r.onBattery; self.power.batteryPercent = r.percent; self.updatePlayback()
+            }
+        }
     }
 
     /// Test hook for the headless dev check: pretend a power condition (never touches the real system).
