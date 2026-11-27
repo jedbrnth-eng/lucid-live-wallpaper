@@ -7,7 +7,7 @@
 // (activation policy .prohibited), and wallpaper windows are built but never ordered front. Safe to run while
 // your everyday copy of Lucid plays. Used by the playback benchmark:
 //   LUCID_SUPPORT_DIR=/tmp/lucid-bench build/Lucid.app/Contents/MacOS/Lucid -lucidBench <video or folder>
-//       [-benchDisplays 1,2,3] [-benchSeconds 20] [-benchRounds 3]
+//       [-benchDisplays 1,2,3] [-benchSeconds 20] [-benchRounds 3] [-benchHalfSpeed off,on]
 // It writes bench.json in LUCID_SUPPORT_DIR and quits. See PlaybackBench.swift for what is measured.
 // Screenshots of app screens with a generated demo library (DevShots.swift):
 //   LUCID_SUPPORT_DIR=/tmp/lucid-shots build/Lucid.app/Contents/MacOS/Lucid -lucidShots <output folder>
@@ -29,9 +29,10 @@ import AppKit
         let displays = (DevMode.arg("benchDisplays") ?? "1,2").split(separator: ",").compactMap { Int($0.trimmingCharacters(in: .whitespaces)) }.filter { $0 > 0 }
         let seconds = DevMode.arg("benchSeconds").flatMap(Double.init) ?? 20
         let rounds = DevMode.arg("benchRounds").flatMap(Int.init) ?? 3
+        let half = (DevMode.arg("benchHalfSpeed") ?? "off").split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) == "on" }
         Task { @MainActor in
             let report = await PlaybackBench.run(files: PlaybackBench.videos(at: target), displays: displays.isEmpty ? [1, 2] : displays,
-                                                 seconds: max(2, seconds), rounds: max(1, rounds))
+                                                 seconds: max(2, seconds), rounds: max(1, rounds), halfSpeed: half.isEmpty ? [false] : half)
             let out = Paths.support.appendingPathComponent("bench.json")
             if let d = try? JSONSerialization.data(withJSONObject: ProcessMeter.jsonSafe(report), options: [.prettyPrinted, .sortedKeys]) { try? d.write(to: out) }
             print("BENCH \(out.path)")

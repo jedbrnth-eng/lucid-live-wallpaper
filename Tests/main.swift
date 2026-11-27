@@ -24,6 +24,7 @@ registerBenchTests()
 registerPlayerShareTests()
 registerSunPickerTests()
 registerSharedPlayerTests()
+registerHighFrameRateTests()
 setvbuf(stdout, nil, _IOLBF, 0)
 let args = CommandLine.arguments.dropFirst().first
 exit(runAllTests(filter: args))

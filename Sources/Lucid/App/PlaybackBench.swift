@@ -27,7 +27,9 @@ import AVFoundation
             .map { dir.appendingPathComponent($0).path }
     }
 
-    static func run(files: [String], displays: [Int], seconds: Double, rounds: Int) async -> [String: Any] {
+    /// `halfSpeed`: the "Half speed for 240 fps videos" setting for each run, interleaved within every round
+    /// (`-benchHalfSpeed off,on` compares the two in one process, at the same load).
+    static func run(files: [String], displays: [Int], seconds: Double, rounds: Int, halfSpeed: [Bool] = [false]) async -> [String: Any] {
         guard let screen = NSScreen.screens.first else { return ["error": "no screen"] }
         guard !files.isEmpty else { return ["error": "no video found"] }
         var measured: [String: [ProcessRates]] = [:]
@@ -36,24 +38,30 @@ import AVFoundation
         for _ in 0..<rounds {
             for f in files {
                 for n in displays {
-                    let a = Assignment(itemID: "bench", title: "Bench", path: f, kind: .video)
-                    let surfaces = (0..<n).map { ScreenSurface(screen: screen, key: "bench-\($0)", assignment: a) }
-                    surfaces.forEach { $0.setRunning(true) }
-                    await wait(warmUp)
-                    let s0 = ProcessMeter.sample(), l0 = ProcessMeter.load1()
-                    await wait(seconds)
-                    let s1 = ProcessMeter.sample(), l1 = ProcessMeter.load1()
-                    measured["\(f)|\(n)", default: []].append(ProcessMeter.rates(from: s0, to: s1))
-                    loads["\(f)|\(n)", default: []].append(((l0 + l1) / 2 * 10).rounded() / 10)
-                    let times = surfaces.compactMap { $0.player?.currentTime().seconds }
-                    shape["\(f)|\(n)"] = [
-                        "players": Set(surfaces.compactMap { $0.player.map(ObjectIdentifier.init) }).count,
-                        "layers_ready": surfaces.filter { ($0.host?.contentLayer as? AVPlayerLayer)?.isReadyForDisplay == true }.count,
-                        "surfaces_running": surfaces.filter(\.isRunning).count,
-                        "playhead_spread_ms": ProcessMeter.spreadMilliseconds(times),
-                    ]
-                    surfaces.forEach { $0.close() }
-                    await wait(1.5)
+                    for h in halfSpeed {
+                        let key = "\(f)|\(n)|\(h)"
+                        Pref.halfSpeedHighFrameRate = h
+                        _ = await FrameRates.rate(f)   // the engine reads it before making a window, too
+                        let a = Assignment(itemID: "bench", title: "Bench", path: f, kind: .video)
+                        let surfaces = (0..<n).map { ScreenSurface(screen: screen, key: "bench-\($0)", assignment: a) }
+                        surfaces.forEach { $0.setRunning(true) }
+                        await wait(warmUp)
+                        let s0 = ProcessMeter.sample(), l0 = ProcessMeter.load1()
+                        await wait(seconds)
+                        let s1 = ProcessMeter.sample(), l1 = ProcessMeter.load1()
+                        measured[key, default: []].append(ProcessMeter.rates(from: s0, to: s1))
+                        loads[key, default: []].append(((l0 + l1) / 2 * 10).rounded() / 10)
+                        let times = surfaces.compactMap { $0.player?.currentTime().seconds }
+                        shape[key] = [
+                            "players": Set(surfaces.compactMap { $0.player.map(ObjectIdentifier.init) }).count,
+                            "layers_ready": surfaces.filter { ($0.host?.contentLayer as? AVPlayerLayer)?.isReadyForDisplay == true }.count,
+                            "surfaces_running": surfaces.filter(\.isRunning).count,
+                            "playhead_spread_ms": ProcessMeter.spreadMilliseconds(times),
+                            "speed": surfaces.first?.playSpeed ?? 0,
+                        ]
+                        surfaces.forEach { $0.close() }
+                        await wait(1.5)
+                    }
                 }
             }
         }
@@ -61,18 +69,23 @@ import AVFoundation
         for f in files {
             let info = await describe(f)
             for n in displays {
-                let rs = measured["\(f)|\(n)"] ?? []
-                var row = info
-                row["displays"] = n
-                row["cpu_pct"] = ProcessMeter.median(rs.map(\.cpuPercent))
-                row["cpu_energy_mw"] = ProcessMeter.median(rs.map(\.energyMilliwatts))
-                row["footprint_mb"] = ProcessMeter.median(rs.map(\.footprintMB))
-                row["wakeups_per_s"] = ProcessMeter.median(rs.map(\.wakeupsPerSecond))
-                row["cpu_pct_rounds"] = rs.map(\.cpuPercent)
-                row["load1_rounds"] = loads["\(f)|\(n)"] ?? []
-                row["load1"] = ProcessMeter.median(loads["\(f)|\(n)"] ?? [])
-                for (k, v) in shape["\(f)|\(n)"] ?? [:] { row[k] = v }
-                results.append(row)
+                for h in halfSpeed {
+                    let key = "\(f)|\(n)|\(h)"
+                    let rs = measured[key] ?? []
+                    var row = info
+                    row["displays"] = n
+                    row["half_speed_240"] = h
+                    row["cpu_pct"] = ProcessMeter.median(rs.map(\.cpuPercent))
+                    row["cpu_energy_mw"] = ProcessMeter.median(rs.map(\.energyMilliwatts))
+                    row["footprint_mb"] = ProcessMeter.median(rs.map(\.footprintMB))
+                    row["wakeups_per_s"] = ProcessMeter.median(rs.map(\.wakeupsPerSecond))
+                    row["cpu_pct_rounds"] = rs.map(\.cpuPercent)
+                    row["cpu_energy_mw_rounds"] = rs.map(\.energyMilliwatts)
+                    row["load1_rounds"] = loads[key] ?? []
+                    row["load1"] = ProcessMeter.median(loads[key] ?? [])
+                    for (k, v) in shape[key] ?? [:] { row[k] = v }
+                    results.append(row)
+                }
             }
         }
         return ["seconds_per_run": seconds, "warm_up_seconds": warmUp, "rounds": rounds, "cpu": ProcessMeter.cpuBrand,

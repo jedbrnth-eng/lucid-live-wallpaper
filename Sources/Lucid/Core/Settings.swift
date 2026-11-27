@@ -62,6 +62,8 @@ enum Pref {
     static var rotateMinutes: Int { get { d.integer(forKey: "rotateMinutes") } set { d.set(newValue, forKey: "rotateMinutes") } }
     static var writeStatus: Bool { d.bool(forKey: "writeStatus") }
     static var speed: Double { get { d.object(forKey: "speed") as? Double ?? 1.0 } set { d.set(newValue, forKey: "speed") } }
+    /// Play 240 fps videos (Apple's Aerials) at half speed: half the frames to decode (HighFrameRate). Off by default.
+    static var halfSpeedHighFrameRate: Bool { get { d.bool(forKey: "halfSpeedHighFrameRate") } set { d.set(newValue, forKey: "halfSpeedHighFrameRate") } }
     static var fillScreen: Bool { get { bool("fillScreen", true) } set { d.set(newValue, forKey: "fillScreen") } }
     static var dim: Double { get { d.double(forKey: "dim") } set { d.set(newValue, forKey: "dim") } }
     /// Import "in place": point at your file instead of copying it into Lucid's Media folder (off = copy, the default).

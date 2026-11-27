@@ -29,6 +29,7 @@ struct SettingsView: View {
     @State private var keyInput: [KeyName: String] = [:]
     @AppStorage("seamlessLoops") private var seamless = true
     @State private var speed = Pref.speed
+    @State private var halfSpeed240 = Pref.halfSpeedHighFrameRate
     @State private var fill = Pref.fillScreen
     @State private var dim = Pref.dim
     @State private var watch = Pref.watchDownloads
@@ -49,6 +50,9 @@ struct SettingsView: View {
                         ForEach([0.5, 0.75, 1.0, 1.25, 1.5], id: \.self) { Text(String(format: "%g×", $0)).tag($0) }
                     }.frame(maxWidth: 260)
                         .onChange(of: speed) { _, v in Pref.speed = v; engine.applyLook() }
+                    Toggle("Play 240 fps videos at half speed", isOn: $halfSpeed240)
+                        .onChange(of: halfSpeed240) { _, v in Pref.halfSpeedHighFrameRate = v; engine.applyLook() }
+                        .help("Apple's Aerials are filmed at 240 frames a second. At half speed Lucid decodes half as many frames, and they move in slow motion. A speed set on a wallpaper wins.")
                     HStack {
                         Text("Dim wallpaper")
                         Slider(value: $dim, in: 0...0.7).frame(maxWidth: 220)

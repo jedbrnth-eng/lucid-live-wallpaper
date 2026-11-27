@@ -250,6 +250,12 @@ import ImageIO
         }
         for (k, p) in surfaces where wanted[k] == nil { p.close(); surfaces[k] = nil }
         for (k, (s, a)) in wanted {
+            // Half speed for 240 fps videos: the frame rate is read (a few milliseconds) before the window is made, so
+            // it starts at the right speed: one player, no cross-fade from a wrong one. Off: nothing is read.
+            if a.kind == .video, Pref.halfSpeedHighFrameRate, FrameRates.fps(a.path) == nil {
+                FrameRates.load(a.path) { [weak self] in self?.refresh() }
+                continue
+            }
             if let p = surfaces[k], p.canShow(a) {
                 p.move(to: s)
                 if p.assignment != a { p.update(a) }
